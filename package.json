@@ -1,0 +1,25 @@
+{
+  "name": "rssnotifier",
+  "version": "1.0.0",
+  "description": "A description",
+  "main": "index.js",
+  "scripts": {
+    "start": "index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/avivace/rssnotifier.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/avivace/rssnotifier/issues"
+  },
+  "homepage": "https://github.com/avivace/rssnotifier#readme",
+  "devDependencies": {
+    "feedparser": "^2.2.0",
+    "iconv": "^2.2.3",
+    "node-schedule": "^1.2.1",
+    "request": "^2.81.0"
+  }
+}
