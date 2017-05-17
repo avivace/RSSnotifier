@@ -1,12 +1,21 @@
-
-var settings = require('./settings');
-
-var schedule = require('node-schedule');
-
 var request = require('request')
   , FeedParser = require('feedparser')
   , Iconv = require('iconv').Iconv
-  , zlib = require('zlib');
+  , zlib = require('zlib')
+  , schedule = require('node-schedule')
+  , sqlite3 = require('sqlite3').verbose();
+
+var db = new sqlite3.Database('db.sqlite');
+
+function readSettings(){
+  // Placeholder db
+  var rs_Query = 'SELECT FeedURL FROM SETTINGS'
+  db.get(rs_Query, function(error, row) {
+    var FeedURL = row["FeedURL"]
+    fetch(FeedURL)
+    }
+  )
+}
 
 function fetch(feed) {
   // Define our streams
@@ -17,7 +26,6 @@ function fetch(feed) {
   req.setHeader('accept', 'text/html,application/xhtml+xml');
 
   var feedparser = new FeedParser();
-
 
   // Define our handlers
   req.on('error', done);
@@ -35,8 +43,12 @@ function fetch(feed) {
   feedparser.on('readable', function() {
     var post;
     while (post = this.read()) {
-      // console.log(post);
-	console.log("un post");
+      var title = post["rss:title"]["#"]
+      console.log(title)
+      if (title.match(/Doctor*\s\w+/g))
+        console.log(" matched")
+      else
+        console.log(" not matched")
     }
   });
 }
@@ -89,8 +101,7 @@ function done(err) {
   //process.exit();
 }
 
-// Don't worry about this. It's just a localhost file server so you can be
-// certain the "remote" feed is available when you run this example.
+// Dummy local web server - serve local resources as remote feed, then fetch it from localhost.
 /*var server = require('http').createServer(function (req, res) {
   var stream = require('fs').createReadStream(require('path').resolve(__dirname, '../rssnotifier/test/feeds' + req.url));
   res.setHeader('Content-Type', 'text/xml; charset=Windows-1251');
@@ -103,6 +114,12 @@ server.listen(0, function () {
 });
 */
 
-var job = schedule.scheduleJob('* * * * * *', function(){
-  fetch(settings.feedUrl);
-});
+
+/*
+var job = schedule.scheduleJob('0 * * * * *', function(){
+  readSettings();
+  fetch(FeedURL);
+});*/
+
+// Do things
+readSettings()
