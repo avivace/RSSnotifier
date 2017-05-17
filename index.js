@@ -6,22 +6,25 @@ var request = require('request')
   , sqlite3 = require('sqlite3').verbose();
 
 var db = new sqlite3.Database('db.sqlite');
-
+var feed
 function readSettings(){
   // Placeholder db
   var rs_Query = 'SELECT FeedURL FROM SETTINGS'
   db.get(rs_Query, function(error, row) {
-    var FeedURL = row["FeedURL"]
-    fetch(FeedURL)
+    feed = row["FeedURL"]
+    fetch()
     }
   )
 }
 
-function fetch(feed) {
+function readQueries(){
+  // Prepare database object
+}
+
+function fetch() {
   // Define our streams
   var req = request(feed, {timeout: 10000, pool: false});
-  req.setMaxListeners(50);
-  // Some feeds do not respond without user-agent and accept headers.
+  req.setMaxListeners(50);  // Some feeds do not respond without user-agent and accept headers.
   req.setHeader('user-agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/31.0.1650.63 Safari/537.36');
   req.setHeader('accept', 'text/html,application/xhtml+xml');
 
