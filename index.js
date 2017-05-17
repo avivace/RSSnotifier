@@ -8,6 +8,8 @@ var request = require('request')
   , Iconv = require('iconv').Iconv
   , zlib = require('zlib');
 
+var job;
+
 function fetch(feed) {
   // Define our streams
   var req = request(feed, {timeout: 10000, pool: false});
@@ -33,12 +35,16 @@ function fetch(feed) {
   feedparser.on('error', done);
   feedparser.on('end', done);
   feedparser.on('readable', function() {
+    
     var post;
     while (post = this.read()) {
-      // console.log(post);
-	console.log("un post");
+      //console.log(post);
+
+      checkMatch(settings.keyword, post.title);
     }
+
   });
+
 }
 
 function maybeDecompress (res, encoding) {
@@ -89,20 +95,44 @@ function done(err) {
   //process.exit();
 }
 
-// Don't worry about this. It's just a localhost file server so you can be
-// certain the "remote" feed is available when you run this example.
-/*var server = require('http').createServer(function (req, res) {
-  var stream = require('fs').createReadStream(require('path').resolve(__dirname, '../rssnotifier/test/feeds' + req.url));
-  res.setHeader('Content-Type', 'text/xml; charset=Windows-1251');
-  res.setHeader('Content-Encoding', 'gzip');
-  stream.pipe(res);
-});
+function checkMatch(keyword, feedItem)
+{
+  
+  if ( feedItem.match(keyword) )
+  {
+    console.log("We have a match:\n" + feedItem + "\n");
+  }
 
-server.listen(0, function () {
-  fetch('http://localhost:' + this.address().port + '/compressed.xml');
-});
-*/
+}
 
-var job = schedule.scheduleJob('* * * * * *', function(){
-  fetch(settings.feedUrl);
-});
+function checkKeywords()
+{
+  if (settings.keyword != null && settings.keyword != "" && settings.keyword != undefined) {
+    return true;
+  }
+  else
+  {
+    return false;
+  }
+
+}
+
+function start() 
+{
+  job = schedule.scheduleJob('* * * * * *', function(){
+    fetch(settings.feedUrl);
+  });
+}
+
+
+
+//////// LET'S GO
+if ( checkKeywords() )
+{
+    start();
+}
+else 
+{
+    console.log("Sorry, you didn't enter any valid keyword to search.")
+    return false;
+}
