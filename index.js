@@ -1,25 +1,34 @@
-
-var settings = require('./settings');
-
-var schedule = require('node-schedule');
-
 var request = require('request')
   , FeedParser = require('feedparser')
   , Iconv = require('iconv').Iconv
-  , zlib = require('zlib');
+  , zlib = require('zlib')
+  , schedule = require('node-schedule')
+  , sqlite3 = require('sqlite3').verbose();
 
-var job;
+var db = new sqlite3.Database('db.sqlite');
+var feed
+function readSettings(){
+  // Placeholder db
+  var rs_Query = 'SELECT FeedURL FROM SETTINGS'
+  db.get(rs_Query, function(error, row) {
+    feed = row["FeedURL"]
+    fetch()
+    }
+  )
+}
 
-function fetch(feed) {
+function readQueries(){
+  // Prepare database object
+}
+
+function fetch() {
   // Define our streams
   var req = request(feed, {timeout: 10000, pool: false});
-  req.setMaxListeners(50);
-  // Some feeds do not respond without user-agent and accept headers.
+  req.setMaxListeners(50);  // Some feeds do not respond without user-agent and accept headers.
   req.setHeader('user-agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/31.0.1650.63 Safari/537.36');
   req.setHeader('accept', 'text/html,application/xhtml+xml');
 
   var feedparser = new FeedParser();
-
 
   // Define our handlers
   req.on('error', done);
@@ -35,16 +44,16 @@ function fetch(feed) {
   feedparser.on('error', done);
   feedparser.on('end', done);
   feedparser.on('readable', function() {
-    
     var post;
     while (post = this.read()) {
-      //console.log(post);
-
-      checkMatch(settings.keyword, post.title);
+      var title = post["rss:title"]["#"]
+      console.log(title)
+      if (title.match(/Doctor*\s\w+/g))
+        console.log(" matched")
+      else
+        console.log(" not matched")
     }
-
   });
-
 }
 
 function maybeDecompress (res, encoding) {
@@ -95,44 +104,25 @@ function done(err) {
   //process.exit();
 }
 
-function checkMatch(keyword, feedItem)
-{
-  
-  if ( feedItem.match(keyword) )
-  {
-    console.log("We have a match:\n" + feedItem + "\n");
-  }
+// Dummy local web server - serve local resources as remote feed, then fetch it from localhost.
+/*var server = require('http').createServer(function (req, res) {
+  var stream = require('fs').createReadStream(require('path').resolve(__dirname, '../rssnotifier/test/feeds' + req.url));
+  res.setHeader('Content-Type', 'text/xml; charset=Windows-1251');
+  res.setHeader('Content-Encoding', 'gzip');
+  stream.pipe(res);
+});
 
-}
-
-function checkKeywords()
-{
-  if (settings.keyword != null && settings.keyword != "" && settings.keyword != undefined) {
-    return true;
-  }
-  else
-  {
-    return false;
-  }
-
-}
-
-function start() 
-{
-  job = schedule.scheduleJob('* * * * * *', function(){
-    fetch(settings.feedUrl);
-  });
-}
+server.listen(0, function () {
+  fetch('http://localhost:' + this.address().port + '/compressed.xml');
+});
+*/
 
 
+/*
+var job = schedule.scheduleJob('0 * * * * *', function(){
+  readSettings();
+  fetch(FeedURL);
+});*/
 
-//////// LET'S GO
-if ( checkKeywords() )
-{
-    start();
-}
-else 
-{
-    console.log("Sorry, you didn't enter any valid keyword to search.")
-    return false;
-}
+// Do things
+readSettings()

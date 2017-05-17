@@ -2,3 +2,4 @@
 node_modules/
 settings.js
 *.log
+db.sqlite
