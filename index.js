@@ -7,19 +7,36 @@ var request = require('request')
   , bot = require('./bot.js')
 
 var db = new sqlite3.Database('db.sqlite');
-var feed
+var feed;
+var queriesPool = [];
+
 function readSettings(){
   // Placeholder db
   var rs_Query = 'SELECT FeedURL FROM SETTINGS'
   db.get(rs_Query, function(error, row) {
-    feed = row["FeedURL"]
-    fetch()
+    feed = row["FeedURL"];
+    readQueries();
     }
-  )
+  );
+  db.close();
 }
 
 function readQueries(){
   // Prepare database object
+  var rq_Query = 'SELECT Keywords AS keyword FROM QUERIES where Active = \'1\'';
+  db.all(rq_Query, function(error, rows) {
+    
+    rows.forEach(function (row)
+    {
+      // For each valid query retrieved from DB, push it into queriesPool array
+      queriesPool.push(row.keyword);
+    });
+
+  });
+
+  // Let's start the games
+  fetch();
+
 }
 
 function fetch() {
@@ -47,12 +64,39 @@ function fetch() {
   feedparser.on('readable', function() {
     var post;
     while (post = this.read()) {
-      var title = post["rss:title"]["#"]
-      console.log(title)
-      if (title.match(/Doctor*\s\w+/g))
-        console.log(" matched")
-      else
-        console.log(" not matched")
+
+      var title = post["rss:title"]["#"];
+
+      // For each query in queriesPool array look for the match
+      for (var i = 0; i < queriesPool.length; i++)
+      {
+
+        //Parse current query element into an Object 
+        var queryKeywords = JSON.parse(queriesPool[i]);
+
+        var matchStillValid = true;
+
+        //For each keyword of current query test the match with Feed Title
+        for (var keyword in queryKeywords) {
+
+          //Build a new regular expression with current keyword to pass it "i" flag for case-insensitive check
+          var re = new RegExp(queryKeywords[keyword], 'i');
+
+          //Test the match for current keyword
+          var match = title.match(re) ? true : false;
+
+          //If even a single keyword does not pass the test make 
+          if (match == false) { matchStillValid = false; }
+
+        }
+
+        //If every keyword in current query passed the test we have our match!
+        //Time to start with notifications!
+        if (matchStillValid)
+            console.log('We have a match:\n' + title + '\n');
+
+      }
+
     }
   });
 }
