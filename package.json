@@ -1,6 +1,6 @@
 {
   "name": "rssnotifier",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "A resident RSS scanner looking for matching entries",
   "main": "index.js",
   "scripts": {

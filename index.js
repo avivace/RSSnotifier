@@ -3,7 +3,8 @@ var request = require('request')
   , Iconv = require('iconv').Iconv
   , zlib = require('zlib')
   , schedule = require('node-schedule')
-  , sqlite3 = require('sqlite3').verbose();
+  , sqlite3 = require('sqlite3').verbose()
+  , bot = require('./bot.js')
 
 var db = new sqlite3.Database('db.sqlite');
 var feed
@@ -125,4 +126,5 @@ var job = schedule.scheduleJob('0 * * * * *', function(){
 });*/
 
 // Do things
+bot.start()
 readSettings()
