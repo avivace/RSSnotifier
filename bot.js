@@ -1,33 +1,90 @@
 module.exports = {
-  start: function () {
-		const TelegramBot = require('node-telegram-bot-api');
+  start: function (db) {
+        var HashMap = require('hashmap');
+        var config = require('./config.js');
+        const TelegramBot = require('node-telegram-bot-api');
 
-		// replace the value below with the Telegram token you receive from @BotFather
-		const token = '398084932:AAEbjm6WZKKSxtqpwIh1IiYy3Ej-j1i_ObM';
+        // Strings
+        const errorText_0 = "Mh, something went wrong. Retry the last phase or /cancel to start over"
+        const errorText_1 = "Command unrecognised. See /help"
+        const errorText_2 = "Something unexpected happened. Please restart from the beginning."
+        const startText = "Yay, welcome and w/e"
+        const helpText = "Yay, commands and w/e"
+        const cancelText = "Yay, aborting all efforts"
+        const addqueryText_0 = "Great! Send me a list of keywords separated by a single space. Like this: `Doctor` `Who`"
+        const addqueryText_1 = "Gotcha. Now send me the Feed URL"
+        const addqueryText_2 = "Yay. I've added the query to your account. You will receive notifications on matching elements"
 
-		// Create a bot that uses 'polling' to fetch new updates
-		const bot = new TelegramBot(token, {polling: true});
+        // Create a bot. Polling to fetch new messages
+        const bot = new TelegramBot(config.token, {polling: true});
+        // Holds the current conversation state per user
+        var convStatusMap = new HashMap();
+        // Holds the Keyword array for the last phase of /addquery conversation
+        var tempArrayMap = new HashMap();
+        var status = 0;
+        
+        // Listen for any kind of message
+        bot.on('message', (msg) => {
 
-		// Matches "/echo [whatever]"
-		bot.onText(/\/echo (.+)/, (msg, match) => {
-		  // 'msg' is the received Message from Telegram
-		  // 'match' is the result of executing the regexp above on the text content
-		  // of the message
+          const chatId = msg.chat.id;
+          const message = msg.text;
+          console.log (chatId + " : " + message)
+          if (!convStatusMap.get(chatId)){
+            status = 0;
+          }
+          else {
+            status = convStatusMap.get(chatId);
+          }
+          // Fallback cancel
+          if (message.match(/\/cancel\s*/)){
+            bot.sendMessage(chatId, cancelText);
+            convStatusMap.set(chatId, 0)
+          }
 
-		  const chatId = msg.chat.id;
-		  const resp = match[1]; // the captured "whatever"
+          console.log(status)
+          // Conversation Handling
+          switch (status){
+            case 0:
+                if (message.match(/\/start\s*/))
+                    bot.sendMessage(chatId, startText);
+                else if (message.match(/\/help\s*/)) 
+                    bot.sendMessage(chatId, helpText);
+                else if (message.match(/\/addquery\s*/)){
+                    bot.sendMessage(chatId, addqueryText_0, {parse_mode:"Markdown"})
+                    convStatusMap.set(chatId, 1)  
+                }
+                else if (message.match(/\/status\s*/)){
+                    // COMPOSE SQL TO MATCH EVERY EXISTENT QUERY
+                    bot.sendMessage(chatId, "status")
+                }
+                else {
+                    bot.sendMessage(chatId, errorText_1)
+                }
+                break;
 
-		  // send back the matched "whatever" to the chat
-		  bot.sendMessage(chatId, resp);
-		});
+            case 1:
+                if (message.match(/[A-Za-z\s0-9]*/)) {
+                    var array = JSON.stringify(message.split(' '));
+                    convStatusMap.set(chatId, 2)
+                    tempArrayMap.set(chatId, array)
+                    bot.sendMessage(chatId, addqueryText_1)
+                }
+                else {
+                    bot.sendMessage(chatId, errorText_0)
+                }
+                break;
 
-		// Listen for any kind of message. There are different kinds of
-		// messages.
-		bot.on('message', (msg) => {
-		  const chatId = msg.chat.id;
+            case 2:
+                // maybe URL regex?
+                convStatusMap.set(chatId, 0)
+                bot.sendMessage(chatId, addqueryText_2)
+                db.run("INSERT INTO `QUERIES`(`ID`,`Keywords`,`Owner`,`Active`) VALUES (NULL,?,?,1)", tempArrayMap.get(chatId) , message);
+                break;
 
-		  // send a message to the chat acknowledging receipt of their message
-		  bot.sendMessage(chatId, 'Received your message');
-		});
+            default:
+                bot.sendMessage(chatId, errorText_2);
+                convStatusMap.set(chatId, 0)
+          }
+        });
   }
 };

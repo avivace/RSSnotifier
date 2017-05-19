@@ -126,5 +126,5 @@ var job = schedule.scheduleJob('0 * * * * *', function(){
 });*/
 
 // Do things
-bot.start()
+bot.start(db)
 readSettings()

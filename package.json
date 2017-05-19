@@ -18,10 +18,11 @@
   "homepage": "https://github.com/avivace/rssnotifier#readme",
   "devDependencies": {
     "feedparser": "^2.2.0",
+    "hashmap": "^2.1.0",
     "iconv": "^2.2.3",
     "node-schedule": "^1.2.1",
+    "node-telegram-bot-api": "^0.27.1",
     "request": "^2.81.0",
-    "sqlite3": "^3.1.8",
-    "node-telegram-bot-api": "^0.27.1"
+    "sqlite3": "^3.1.8"
   }
 }
