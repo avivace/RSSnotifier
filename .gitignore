@@ -1,5 +1,3 @@
 *.swp
 *.log
-db.sqlite
-config.js
 node_modules/
