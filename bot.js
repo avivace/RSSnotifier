@@ -78,7 +78,7 @@ module.exports = {
                 // maybe URL regex?
                 convStatusMap.set(chatId, 0)
                 bot.sendMessage(chatId, addqueryText_2)
-                db.run("INSERT INTO `QUERIES`(`ID`,`Keywords`,`Owner`,`Active`) VALUES (NULL,?,?,1)", tempArrayMap.get(chatId) , message);
+                db.run("INSERT INTO `QUERIES`(`ID`,`Keywords`,`Owner`,`FeedURL`,`Active`) VALUES (NULL,?,?,?, 1)", tempArrayMap.get(chatId) , chatId, message);
                 break;
 
             default:
