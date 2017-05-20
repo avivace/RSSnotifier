@@ -1,6 +1,5 @@
 module.exports = {
-    start: function(db, bot, config) {
-        var HashMap = require('hashmap');
+    start: function(db, bot, config, HashMap) {
 
         // Strings
         const errorText_0 = "Mh, something went wrong. Retry the last phase or /cancel to start over"
@@ -14,12 +13,12 @@ module.exports = {
         const addqueryText_2 = "Yay. I've added the query to your account. You will receive notifications on matching elements"
         const whitelistDenyText = "You are not allowed to use this bot. Sorry."
 
-
         // Holds the current conversation state per user
         var convStatusMap = new HashMap();
         // Holds the Keyword array for the last phase of /addquery conversation
         var tempArrayMap = new HashMap();
         var status = 0;
+        // Element in array helper function
         var contains = function(needle) {
             // Per spec, the way to identify NaN is that it is not equal to itself
             var findNaN = needle !== needle;
@@ -48,6 +47,8 @@ module.exports = {
 
         // Listen for messages
         bot.on('message', (msg) => {
+            // TODO: allow use in group: if in group, every message starts with @bot
+            //  (privacy activated)
             const chatId = msg.chat.id;
             const message = msg.text;
             console.log("---")
@@ -87,6 +88,7 @@ module.exports = {
                         break;
 
                     case 1:
+                        // TODO: pre validate message (only words and spaces)
                         if (message.match(/[A-Za-z\s0-9]*/)) {
                             var array = JSON.stringify(message.split(' '));
                             convStatusMap.set(chatId, 2)
@@ -98,9 +100,10 @@ module.exports = {
                         break;
 
                     case 2:
-                        // maybe URL regex?
+                        // TODO: pre validate URL: regex + try to see if it's valid
                         convStatusMap.set(chatId, 0)
                         bot.sendMessage(chatId, addqueryText_2)
+                        // TODO: check again if we're inserting valid values
                         db.run("INSERT INTO `QUERIES`(`ID`,`Keywords`,`Owner`,`FeedURL`,`Active`) VALUES (NULL,?,?,?, 1)", tempArrayMap.get(chatId), chatId, message);
                         break;
 
@@ -110,7 +113,7 @@ module.exports = {
                 }
             } else {
                 console.log("Denied")
-                bot.sendMessage(chatId, whitelistDenyText)
+                bot.sendMessage(chatId, whitelistDenyText + " chatId: " + chatId)
             }
         });
     }

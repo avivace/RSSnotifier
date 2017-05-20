@@ -5,10 +5,14 @@ var request = require('request'),
     schedule = require('node-schedule'),
     sqlite3 = require('sqlite3').verbose(),
     botUI = require('./bot.js'),
-    config = require('./config.js');
+    config = require('./config.js'),
+    HashMap = require('hashmap');
+
 
 const TelegramBot = require('node-telegram-bot-api');
 var db = new sqlite3.Database('db.sqlite');
+
+var alreadyParsed = new HashMap();
 
 // Telegram bot. Polling to fetch new messages
 const bot = new TelegramBot(config.token, {
@@ -18,6 +22,7 @@ const bot = new TelegramBot(config.token, {
 function getFeeds() {
     // Get all unique active feeds to retrieve
     gf_Query = 'SELECT DISTINCT FeedURL from QUERIES where Active =\'1\'';
+    // FIXME: use ? notation for better readability
     db.all(gf_Query, function(error, rows) {
         if (rows.length == 0) console.log("No feeds")
 
@@ -26,6 +31,7 @@ function getFeeds() {
 
             // ...fetch the feed, retrieve the queries for it and test the match
             fetch(row.FeedURL);
+            // TODO: if the row is invalid for some reason, skip it
 
         });
 
@@ -82,7 +88,7 @@ function fetch(url) {
         timeout: 10000,
         pool: false
     });
-    console.log("Fetching "+url)
+    
     req.setMaxListeners(50); // Some feeds do not respond without user-agent and accept headers.
     req.setHeader('user-agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/31.0.1650.63 Safari/537.36');
     req.setHeader('accept', 'text/html,application/xhtml+xml');
@@ -105,25 +111,68 @@ function fetch(url) {
 
     // Select every active query (and its owner) for current feed...
     var rq_Query = 'SELECT Owner, Keywords AS keywordGroup FROM QUERIES where FeedURL = \'' + url + '\' AND Active = \'1\'';
+    // FIXME: use ? notation for better readability
     db.all(rq_Query, function(error, rows) {
+        var i = 0;
+        var done = 0;
+        var firsttime = 0;
+        var title;
+        console.log("Fetching "+url)
         feedparser.on('readable', function() {
-
             var post;
-            while (post = this.read()) {
+            if (!done) {
+              while (post = this.read()) {
+                  
+                  title = post["rss:title"]["#"];
+                  //console.log("Element #"+i+" - "+title)
+                  if (done) console.log("done")
+                  if (i == 0 && !alreadyParsed.get(url)) {
+                    console.log("First time on this Feed")
+                    alreadyParsed.set(url, title)
+                    console.log(alreadyParsed.get(url))
+                    firsttime = 1;
+                  }
 
-                // ...and for every results...
-                rows.forEach(function(row) {
+                  if (i == 0) {
+                    firstOfIteration = title;
+                    alreadyParsed.set("FI"+url, title)
+                  }
+                  if (!firsttime && alreadyParsed.get(url) == title){
+                      done = 1;
+                      alreadyParsed.set(url, firstOfIteration)
+                      console.log("Stopping at "+ i)
 
-                    // ...look for match
-                    match(post, row.keywordGroup, row.Owner);
+                      // just quit this feed
+                  }
+                   
+                  // ...and for every results...
+                  if (!done) {
+                     
+                     rows.forEach(function(row) {
 
-                });
+                      // ...look for match
 
+                        match(post, row.keywordGroup, row.Owner);
+
+                     });
+                  }
+
+              i += 1;
+              }
             }
-
+        
         });
-
-
+    /*
+    if (done == 0){
+      console.log("Finished a totally new feed, setting the last Parsed to FI")
+      alreadyParsed.set(url, alreadyParsed.get("FI"+url, title))
+    }
+    FIXME:
+    NOT WORKING, IT'S ACTUALLY EXECUTED BEFORE feed.readable
+    Find a way to know if the last interaction finished without ever encountering
+    alreadyParsed (totally new feed) AND SET alreadyParsed to the head of the
+    new feed
+    */
     });
 }
 
@@ -179,8 +228,12 @@ function done(err) {
 
 // Do things
 // Bot up and running
-botUI.start(db, bot, config)
+botUI.start(db, bot, config, HashMap)
 // Run the entire thing every 5 seconds
 var job = schedule.scheduleJob('*/5 * * * * *', function(){
   getFeeds();
 });
+
+// TODO: different refresh time for specific feed urls?
+// TODO: Allow user to receive notification as digests in specific time
+// TODO: Some kind of exception handling?
