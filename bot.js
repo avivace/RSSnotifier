@@ -1,5 +1,5 @@
 module.exports = {
-    start: function(db, bot) {
+    start: function(db, bot, config) {
         var HashMap = require('hashmap');
 
         // Strings
