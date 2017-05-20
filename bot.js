@@ -17,8 +17,10 @@ module.exports = {
         var convStatusMap = new HashMap();
         // Holds the Keyword array for the last phase of /addquery conversation
         var tempArrayMap = new HashMap();
+        // Initial conversation handler status
         var status = 0;
-        // Element in array helper function
+
+        // Element is in array helper function
         var contains = function(needle) {
             // Per spec, the way to identify NaN is that it is not equal to itself
             var findNaN = needle !== needle;
@@ -44,8 +46,7 @@ module.exports = {
             }
             return indexOf.call(this, needle) > -1;
         };
-
-        // Listen for messages
+        
         bot.on('message', (msg) => {
             // TODO: allow use in group: if in group, every message starts with @bot
             //  (privacy activated)
@@ -62,7 +63,7 @@ module.exports = {
             console.log("C Status:" + status)
             if (!config.whitelist_enabled || contains.call(config.whitelist, chatId)) {
                 console.log("Allowed")
-                // Fallback /cancel
+                    // Fallback /cancel
                 if (message.match(/\/cancel\s*/)) {
                     bot.sendMessage(chatId, cancelText);
                     convStatusMap.set(chatId, 0)
@@ -103,7 +104,7 @@ module.exports = {
                         // TODO: pre validate URL: regex + try to see if it's valid
                         convStatusMap.set(chatId, 0)
                         bot.sendMessage(chatId, addqueryText_2)
-                        // TODO: check again if we're inserting valid values
+                            // TODO: check again if we're inserting valid values
                         db.run("INSERT INTO `QUERIES`(`ID`,`Keywords`,`Owner`,`FeedURL`,`Active`) VALUES (NULL,?,?,?, 1)", tempArrayMap.get(chatId), chatId, message);
                         break;
 
