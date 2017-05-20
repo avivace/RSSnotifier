@@ -11,7 +11,7 @@
     "url": "git+https://github.com/avivace/rssnotifier.git"
   },
   "author": "",
-  "license": "ISC",
+  "license": "GPL-3.0",
   "bugs": {
     "url": "https://github.com/avivace/rssnotifier/issues"
   },
