@@ -11,12 +11,13 @@ var request = require('request'),
 
 const TelegramBot = require('node-telegram-bot-api');
 var db = new sqlite3.Database('db.sqlite');
-
+var i = 0;
+var done = 0;
 var alreadyParsed = new HashMap();
 
 // Telegram bot. Polling to fetch new messages
 const bot = new TelegramBot(config.token, {
-  polling: true
+    polling: true
 });
 
 function getFeeds() {
@@ -69,17 +70,19 @@ function match(post, queryKeywords, chatId) {
     // If every keyword in current query passed the test we have our match!
     // Time to start with notifications!
     if (matchStillValid) {
-      // TODO: prevalid Feed-relative hardcoded values and avoid composing 
-      //  the notification message with invalid ones
-      console.log("matched")
-      var description = post["rss:description"]["#"];
-      var link = post["rss:link"]["#"]
-      bot.sendMessage(chatId, "<b>New match!</b> \n"+ title + "\n" + description + "\n" + link, { parse_mode: "HTML" })
+        // TODO: prevalid Feed-relative hardcoded values and avoid composing 
+        //  the notification message with invalid ones
+        console.log("matched")
+        var description = post["rss:description"]["#"];
+        var link = post["rss:link"]["#"]
+        console.log("Matched " + title + ".Sending notification to " + chatId + ".")
+        bot.sendMessage(chatId, "<b>New match!</b> \n" + title + "\n" + description + "\n" + link, {
+            parse_mode: "HTML"
+        })
     }
 
 
 }
-
 
 
 function fetch(url) {
@@ -88,7 +91,7 @@ function fetch(url) {
         timeout: 10000,
         pool: false
     });
-    
+
     req.setMaxListeners(50); // Some feeds do not respond without user-agent and accept headers.
     req.setHeader('user-agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/31.0.1650.63 Safari/537.36');
     req.setHeader('accept', 'text/html,application/xhtml+xml');
@@ -96,7 +99,7 @@ function fetch(url) {
     var feedparser = new FeedParser();
 
     // Define our handlers
-    req.on('error', done);
+    req.on('error', feedParseDone);
     req.on('response', function(res) {
         if (res.statusCode != 200) return this.emit('error', new Error('Bad status code'));
         var encoding = res.headers['content-encoding'] || 'identity',
@@ -106,73 +109,64 @@ function fetch(url) {
         res.pipe(feedparser);
     });
 
-    feedparser.on('error', done);
-    feedparser.on('end', done);
+    feedparser.on('error', feedParseDone);
+    feedparser.on('end', feedParseDone);
 
     // Select every active query (and its owner) for current feed...
     var rq_Query = 'SELECT Owner, Keywords AS keywordGroup FROM QUERIES where FeedURL = \'' + url + '\' AND Active = \'1\'';
     // FIXME: use ? notation for better readability
     db.all(rq_Query, function(error, rows) {
-        var i = 0;
-        var done = 0;
+        done = 0;
         var firsttime = 0;
         var title;
-        console.log("Fetching "+url)
+        i = 0;
+        console.log("Fetching " + url)
         feedparser.on('readable', function() {
             var post;
+
             if (!done) {
-              while (post = this.read()) {
-                  
-                  title = post["rss:title"]["#"];
-                  //console.log("Element #"+i+" - "+title)
-                  if (done) console.log("done")
-                  if (i == 0 && !alreadyParsed.get(url)) {
-                    console.log("First time on this Feed")
-                    alreadyParsed.set(url, title)
-                    console.log(alreadyParsed.get(url))
-                    firsttime = 1;
-                  }
+                while (post = this.read()) {
+                    title = post["rss:title"]["#"];
+                    if (i == 0 && !alreadyParsed.get(url)) {
+                        // TODO: This should be covered by feedParseDone()
+                        console.log("  First time on this Feed")
+                        alreadyParsed.set(url, title)
+                        console.log(alreadyParsed.get(url))
+                        firsttime = 1;
+                    }
 
-                  if (i == 0) {
-                    firstOfIteration = title;
-                    alreadyParsed.set("FI"+url, title)
-                  }
-                  if (!firsttime && alreadyParsed.get(url) == title){
-                      done = 1;
-                      alreadyParsed.set(url, firstOfIteration)
-                      console.log("Stopping at "+ i)
+                    if (i == 0) {
+                        firstOfIteration = title;
+                        alreadyParsed.set("FI" + url, title)
+                    }
+                    if (!firsttime && alreadyParsed.get(url) == title) {
+                        done = 1;
+                        alreadyParsed.set(url, firstOfIteration)
+                        console.log("  Stopping at " + i)
+                        console.log("    Head is " + title)
 
-                      // just quit this feed
-                  }
-                   
-                  // ...and for every results...
-                  if (!done) {
-                     
-                     rows.forEach(function(row) {
+                        // just quit this feed
+                    }
 
-                      // ...look for match
+                    // ...and for every results...
+                    if (!done) {
 
-                        match(post, row.keywordGroup, row.Owner);
+                        rows.forEach(function(row) {
 
-                     });
-                  }
+                            // ...look for match
+                            console.log("matching")
+                            match(post, row.keywordGroup, row.Owner);
 
-              i += 1;
-              }
+                        });
+                        i += 1;
+                    }
+
+                }
+
+            } else {
+                feedParseDone("", url, title);
             }
-        
         });
-    /*
-    if (done == 0){
-      console.log("Finished a totally new feed, setting the last Parsed to FI")
-      alreadyParsed.set(url, alreadyParsed.get("FI"+url, title))
-    }
-    FIXME:
-    NOT WORKING, IT'S ACTUALLY EXECUTED BEFORE feed.readable
-    Find a way to know if the last interaction finished without ever encountering
-    alreadyParsed (totally new feed) AND SET alreadyParsed to the head of the
-    new feed
-    */
     });
 }
 
@@ -217,10 +211,15 @@ function getParams(str) {
     return params;
 }
 
-function done(err) {
+function feedParseDone(err, url, title) {
     if (err) {
         console.log(err, err.stack);
         return process.exit(1);
+    }
+    console.log("  Tried " + i + " matches, done=" + done)
+    if (done == 0) {
+        console.log("Finished a totally new feed, setting the last Parsed to FI")
+        alreadyParsed.set(url, alreadyParsed.get("FI" + url, title))
     }
     //server.close();
     //process.exit();
@@ -229,11 +228,12 @@ function done(err) {
 // Do things
 // Bot up and running
 botUI.start(db, bot, config, HashMap)
-// Run the entire thing every 5 seconds
-var job = schedule.scheduleJob('*/5 * * * * *', function(){
-  getFeeds();
+    // Run the entire thing every 5 seconds
+var job = schedule.scheduleJob('*/5 * * * * *', function() {
+    getFeeds();
 });
 
 // TODO: different refresh time for specific feed urls?
 // TODO: Allow user to receive notification as digests in specific time
 // TODO: Some kind of exception handling?
+// TODO: Make code decent, 78-80 columns max
