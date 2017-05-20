@@ -36,7 +36,6 @@ function readQueries(){
 
   // Let's start the games
   fetch();
-
 }
 
 function fetch() {
@@ -171,4 +170,4 @@ var job = schedule.scheduleJob('0 * * * * *', function(){
 
 // Do things
 bot.start(db)
-readSettings()
+//readSettings()
