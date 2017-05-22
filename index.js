@@ -69,9 +69,10 @@ function getParams(str) {
 // Serious shit
 function getFeeds() {
     // Retrieve all the unique feed URLs, and fetch each of them
-    gf_Query = 'SELECT DISTINCT FeedURL from QUERIES where Active =\'1\'';
-    // FIXME: use ? notation for better readability
-    db.all(gf_Query, function(error, rows) {
+    var gf_Query = 'SELECT DISTINCT FeedURL from QUERIES where Active = ?';
+    var gf_Query_Params = [1];
+
+    db.all(gf_Query, gf_Query_Params, function(error, rows) {
         if (rows.length == 0) console.log("No feeds")
         rows.forEach(function(row) {
             fetch(row.FeedURL);
@@ -148,9 +149,10 @@ function fetch(url) {
     feedparser.on('end', feedParseDone);
 
     // Select every active query (and its owner) for current feed
-    var rq_Query = 'SELECT Owner, Keywords AS keywordGroup FROM QUERIES where FeedURL = \'' + url + '\' AND Active = \'1\'';
-    // FIXME: use ? notation for better readability
-    db.all(rq_Query, function(error, rows) {
+    var rq_Query = 'SELECT Owner, Keywords AS keywordGroup FROM QUERIES where FeedURL = ? AND Active = ?';
+    var rq_Query_Params = [url, 1];
+
+    db.all(rq_Query, rq_Query_Params, function(error, rows) {
         done = 0;
         var firsttime = 0;
         var title;
