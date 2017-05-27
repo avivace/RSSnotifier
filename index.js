@@ -110,7 +110,7 @@ function match(post, queryKeywords, chatId) {
     if (matchStillValid) {
         // TODO: prevalid Feed-relative hardcoded values and avoid composing 
         //  the notification message with invalid ones
-        console.log("matched")
+        console.log("Matched!")
         var description = post["rss:description"]["#"];
         var link = post["rss:link"]["#"]
         console.log("Matched " + title + ".Sending notification to " + chatId + ".")
@@ -164,62 +164,40 @@ function fetch(url) {
             if (!done) {
                 while (post = this.read()) {
                     title = post["rss:title"]["#"];
-                    if (i == 0 && !alreadyParsed.get(url)) {
-                        // TODO: This should be covered by feedParseDone()
-                        console.log("  First time on this Feed")
-                        alreadyParsed.set(url, title)
-                        console.log(alreadyParsed.get(url))
-                        firsttime = 1;
-                    }
 
-                    if (i == 0) {
-                        firstOfIteration = title;
-                        alreadyParsed.set("FI" + url, title)
-                    }
-                    if (!firsttime && alreadyParsed.get(url) == title) {
+                    if (title == alreadyParsed.get(url)) {
                         done = 1;
                         alreadyParsed.set(url, firstOfIteration)
                         console.log("  Stopping at " + i)
-                        console.log("    Head is " + title)
-
                         // just quit this feed
                     }
+                    else if (i == 0) {
+                        firstOfIteration = title;
+                        alreadyParsed.set(url, title)
+                    }
 
-                    // ...and for every results...
                     if (!done) {
-
                         rows.forEach(function(row) {
-
-                            // ...look for match
-                            console.log("matching")
                             match(post, row.keywordGroup, row.Owner);
-
                         });
                         i += 1;
                     }
-
                 }
-
             } else {
-                feedParseDone("", url, title);
+                feedParseDone("");
             }
         });
     });
 }
 
-// Called on request error, feedparser error or end and manually when we're skipping the feed processing
-function feedParseDone(err, url, title) {
+// Called on request error, feedparser error or end and manually when we're 
+//  skipping the feed processing
+function feedParseDone(err) {
     if (err) {
         console.log(err, err.stack);
         return process.exit(1);
     }
-    console.log("  Tried " + i + " matches, done=" + done)
-    if (done == 0) {
-        console.log("Finished a totally new feed, setting the last Parsed to FI")
-        alreadyParsed.set(url, alreadyParsed.get("FI" + url, title))
-    }
-    //server.close();
-    //process.exit();
+    console.log("  Tried " + i + " matches")
 }
 
 // DO THINGS
