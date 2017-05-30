@@ -75,6 +75,7 @@ function getFeeds() {
     db.all(gf_Query, gf_Query_Params, function(error, rows) {
         if (rows.length == 0) console.log("No feeds")
         rows.forEach(function(row) {
+            // Try to fetch current URL and handle errors or bad response status codes
             tryFetch(row.FeedURL);
         });
     });
@@ -84,7 +85,7 @@ function match(post, queryKeywords, chatId) {
     // Parse current query element into an Object 
     var queryKeywords = JSON.parse(queryKeywords);
     // Declare the match valid in advance
-    var matchStillValid = false;
+    var matchStillValid = true;
 
     var title = post["rss:title"]["#"];
 
@@ -135,11 +136,13 @@ function tryFetch(url) {
     req.setHeader('accept', 'text/html,application/xhtml+xml');
 
 
-    // Handlers
+    // HANDLERS
+    // Handle request error
     req.on('error', function(err){
         console.log('ERROR:', err.code, 'on', url, '\n Not a valid URL, aborting feed fetching... \n')
     });
 
+    // Handle bad response status codes and, in case of status code 200, go on parsing the feed
     req.on('response', function(res) {
 
         switch (res.statusCode) {
@@ -150,16 +153,16 @@ function tryFetch(url) {
                 console.log('\nERROR:', res.statusCode, 'on', url, '\n INTERNAL SERVER ERROR, aborting feed fetching... \n');
                 break;
             case 200:
+                // No request error, parse fetch the feed and try parsing it!
                 fetch(url, res);
                 break;
         }
-        
     });
 }
 
+
 function fetch(url, res) {
     
-
     var feedparser = new FeedParser();
 
     var encoding = res.headers['content-encoding'] || 'identity',
