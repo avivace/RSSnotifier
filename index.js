@@ -75,7 +75,7 @@ function getFeeds() {
     db.all(gf_Query, gf_Query_Params, function(error, rows) {
         if (rows.length == 0) console.log("No feeds")
         rows.forEach(function(row) {
-            fetch(row.FeedURL);
+            tryFetch(row.FeedURL);
         });
     });
 }
@@ -84,7 +84,7 @@ function match(post, queryKeywords, chatId) {
     // Parse current query element into an Object 
     var queryKeywords = JSON.parse(queryKeywords);
     // Declare the match valid in advance
-    var matchStillValid = true;
+    var matchStillValid = false;
 
     var title = post["rss:title"]["#"];
 
@@ -120,7 +120,9 @@ function match(post, queryKeywords, chatId) {
     }
 }
 
-function fetch(url) {
+function tryFetch(url) {
+
+
     // Stream definitions
     var req = request(url, {
         timeout: 10000,
@@ -132,18 +134,40 @@ function fetch(url) {
     req.setHeader('user-agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/31.0.1650.63 Safari/537.36');
     req.setHeader('accept', 'text/html,application/xhtml+xml');
 
-    var feedparser = new FeedParser();
 
     // Handlers
-    req.on('error', feedParseDone);
-    req.on('response', function(res) {
-        if (res.statusCode != 200) return this.emit('error', new Error('Bad status code'));
-        var encoding = res.headers['content-encoding'] || 'identity',
-            charset = getParams(res.headers['content-type'] || '').charset;
-        // res = maybeDecompress(res, encoding);
-        res = maybeTranslate(res, charset);
-        res.pipe(feedparser);
+    req.on('error', function(err){
+        console.log('ERROR:', err.code, 'on', url, '\n Not a valid URL, aborting feed fetching... \n')
     });
+
+    req.on('response', function(res) {
+
+        switch (res.statusCode) {
+            case 404:
+                console.log('\nERROR:', res.statusCode, 'on', url, '\n FEED NOT FOUND, aborting feed fetching... \n');
+                break;
+            case 500:
+                console.log('\nERROR:', res.statusCode, 'on', url, '\n INTERNAL SERVER ERROR, aborting feed fetching... \n');
+                break;
+            case 200:
+                fetch(url, res);
+                break;
+        }
+        
+    });
+}
+
+function fetch(url, res) {
+    
+
+    var feedparser = new FeedParser();
+
+    var encoding = res.headers['content-encoding'] || 'identity',
+        charset = getParams(res.headers['content-type'] || '').charset;
+    // res = maybeDecompress(res, encoding);
+    res = maybeTranslate(res, charset);
+    res.pipe(feedparser);
+
 
     feedparser.on('error', feedParseDone);
     feedparser.on('end', feedParseDone);
