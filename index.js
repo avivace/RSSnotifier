@@ -6,7 +6,8 @@ var request = require('request'),
     sqlite3 = require('sqlite3').verbose(),
     HashMap = require('hashmap'),
     botUI = require('./bot.js'),
-    config = require('./config.js');
+    config = require('./config.js'),
+    stripTags = require('striptags');
 
 const TelegramBot = require('node-telegram-bot-api');
 var db = new sqlite3.Database('db.sqlite');
@@ -112,7 +113,9 @@ function match(post, queryKeywords, chatId) {
         // TODO: prevalid Feed-relative hardcoded values and avoid composing 
         //  the notification message with invalid ones
         console.log("Matched!")
-        var description = post["rss:description"]["#"];
+        // Stripping HTML code from description to avoid Telegram complaining,
+        // it possibly needs addition of allowed tags
+        var description = stripTags(post["rss:description"]["#"]);
         var link = post["rss:link"]["#"]
         console.log("Matched " + title + ".Sending notification to " + chatId + ".")
         bot.sendMessage(chatId, "<b>New match!</b> \n" + title + "\n" + description + "\n" + link, {
