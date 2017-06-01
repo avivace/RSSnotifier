@@ -126,43 +126,50 @@ function match(post, queryKeywords, chatId) {
 
 function tryFetch(url) {
 
+    // Try http request code block for current feed and catch any
+    // unhandled error thrown out
+    try {
 
-    // Stream definitions
-    var req = request(url, {
-        timeout: 10000,
-        pool: false
-    });
+        // Stream definitions
+        var req = request(url, {
+            timeout: 10000,
+            pool: false
+        });
 
-    // Some feeds do not respond without user-agent and accept headers.
-    req.setMaxListeners(50);
-    req.setHeader('user-agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/31.0.1650.63 Safari/537.36');
-    req.setHeader('accept', 'text/html,application/xhtml+xml');
+        // Some feeds do not respond without user-agent and accept headers.
+        req.setMaxListeners(50);
+        req.setHeader('user-agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_8_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/31.0.1650.63 Safari/537.36');
+        req.setHeader('accept', 'text/html,application/xhtml+xml');
 
 
-    // HANDLERS
-    // Handle request error
-    req.on('error', function(err){
-        console.log('ERROR:', err.code, 'on', url, '\n Not a valid URL, aborting feed fetching... \n')
-    });
+        // HANDLERS
+        // Handle request error
+        req.on('error', function(err) {
+            console.log('ERROR:', err.code, 'on', url, '- Not a valid URL - Aborting feed...\n')
+        });
 
-    // Handle bad response status codes and, in case of status code 200, go on parsing the feed
-    req.on('response', function(res) {
+        // Handle bad response status codes and, in case of status code 200, go on parsing the feed
+        req.on('response', function(res) {
 
-        switch (res.statusCode) {
-            case 404:
-                console.log('\nERROR:', res.statusCode, 'on', url, '\n FEED NOT FOUND, aborting feed fetching... \n');
-                break;
-            case 500:
-                console.log('\nERROR:', res.statusCode, 'on', url, '\n INTERNAL SERVER ERROR, aborting feed fetching... \n');
-                break;
-            case 200:
-                // No request error, parse fetch the feed and try parsing it!
-                fetch(url, res);
-                break;
-        }
-    });
+            switch (res.statusCode) {
+                case 404:
+                    console.log('ERROR: Status Code', res.statusCode, 'FEED NOT FOUND on', url, '- Aborting feed...\n');
+                    break;
+                case 500:
+                    console.log('ERROR: Status Code', res.statusCode, 'INTERNAL SERVER ERROR on', url, '- Aborting feed...\n');
+                    break;
+                case 200:
+                    // No request error, fetch the feed and try parsing it!
+                    fetch(url, res);
+                    break;
+            }
+        });
+    }
+    catch(err) {
+        console.log('ERROR on', url, '- Aborting feed...' + '\n Have you missed the protocol in feed URL?\n');
+        //console.log(err);
+    }
 }
-
 
 function fetch(url, res) {
     
