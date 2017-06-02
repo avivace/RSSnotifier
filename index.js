@@ -77,7 +77,7 @@ function getFeeds() {
         if (rows.length == 0) console.log("No feeds")
         rows.forEach(function(row) {
             // Try to fetch current URL and handle errors or bad response status codes
-            tryFetch(row.FeedURL);
+            fetch(row.FeedURL);
         });
     });
 }
@@ -124,10 +124,9 @@ function match(post, queryKeywords, chatId) {
     }
 }
 
-function tryFetch(url) {
+function fetch(url) {
 
-    // Try http request code block for current feed and catch any
-    // unhandled error thrown out
+    // Watch out for any error raised during fetching/parsing process
     try {
 
         // Stream definitions
@@ -152,79 +151,72 @@ function tryFetch(url) {
         req.on('response', function(res) {
 
             switch (res.statusCode) {
-                case 404:
-                    console.log('ERROR: Status Code', res.statusCode, 'FEED NOT FOUND on', url, '- Aborting feed...\n');
-                    break;
                 case 500:
-                    console.log('ERROR: Status Code', res.statusCode, 'INTERNAL SERVER ERROR on', url, '- Aborting feed...\n');
+                    console.log('ERROR: Status Code', res.statusCode, '- INTERNAL SERVER ERROR on', url, '- Aborting feed...\n');
+                    break;
+                case 404:
+                    console.log('ERROR: Status Code', res.statusCode, '- FEED NOT FOUND on', url, '- Aborting feed...\n');
                     break;
                 case 200:
                     // No request error, fetch the feed and try parsing it!
-                    fetch(url, res);
+                    //fetch(url, res);
+                    var feedparser = new FeedParser();
+
+                    var encoding = res.headers['content-encoding'] || 'identity',
+                        charset = getParams(res.headers['content-type'] || '').charset;
+                    // res = maybeDecompress(res, encoding);
+                    res = maybeTranslate(res, charset);
+                    res.pipe(feedparser);
+
+
+                    feedparser.on('error', feedParseDone);
+                    feedparser.on('end', feedParseDone);
+
+                    // Select every active query (and its owner) for current feed
+                    var rq_Query = 'SELECT Owner, Keywords AS keywordGroup FROM QUERIES where FeedURL = ? AND Active = ?';
+                    var rq_Query_Params = [url, 1];
+
+                    db.all(rq_Query, rq_Query_Params, function(error, rows) {
+                        done = 0;
+                        var firsttime = 0;
+                        var title;
+                        i = 0;
+                        console.log("Fetching " + url)
+                        feedparser.on('readable', function() {
+                            var post;
+
+                            if (!done) {
+                                while (post = this.read()) {
+                                    title = post["rss:title"]["#"];
+
+                                    if (title == alreadyParsed.get(url)) {
+                                        done = 1;
+                                        alreadyParsed.set(url, firstOfIteration)
+                                        console.log("  Stopping at " + i)
+                                            // just quit this feed
+                                    } else if (i == 0) {
+                                        firstOfIteration = title;
+                                        alreadyParsed.set(url, title)
+                                    }
+
+                                    if (!done) {
+                                        rows.forEach(function(row) {
+                                            match(post, row.keywordGroup, row.Owner);
+                                        });
+                                        i += 1;
+                                    }
+                                }
+                            } else {
+                                feedParseDone("");
+                            }
+                        });
+                    });
                     break;
             }
         });
+    } catch (err) {
+        console.log('ERROR:', err.message, '- Aborting feed...\n');
     }
-    catch(err) {
-        console.log('ERROR on', url, '- Aborting feed...' + '\n Have you missed the protocol in feed URL?\n');
-        //console.log(err);
-    }
-}
-
-function fetch(url, res) {
-    
-    var feedparser = new FeedParser();
-
-    var encoding = res.headers['content-encoding'] || 'identity',
-        charset = getParams(res.headers['content-type'] || '').charset;
-    // res = maybeDecompress(res, encoding);
-    res = maybeTranslate(res, charset);
-    res.pipe(feedparser);
-
-
-    feedparser.on('error', feedParseDone);
-    feedparser.on('end', feedParseDone);
-
-    // Select every active query (and its owner) for current feed
-    var rq_Query = 'SELECT Owner, Keywords AS keywordGroup FROM QUERIES where FeedURL = ? AND Active = ?';
-    var rq_Query_Params = [url, 1];
-
-    db.all(rq_Query, rq_Query_Params, function(error, rows) {
-        done = 0;
-        var firsttime = 0;
-        var title;
-        i = 0;
-        console.log("Fetching " + url)
-        feedparser.on('readable', function() {
-            var post;
-
-            if (!done) {
-                while (post = this.read()) {
-                    title = post["rss:title"]["#"];
-
-                    if (title == alreadyParsed.get(url)) {
-                        done = 1;
-                        alreadyParsed.set(url, firstOfIteration)
-                        console.log("  Stopping at " + i)
-                        // just quit this feed
-                    }
-                    else if (i == 0) {
-                        firstOfIteration = title;
-                        alreadyParsed.set(url, title)
-                    }
-
-                    if (!done) {
-                        rows.forEach(function(row) {
-                            match(post, row.keywordGroup, row.Owner);
-                        });
-                        i += 1;
-                    }
-                }
-            } else {
-                feedParseDone("");
-            }
-        });
-    });
 }
 
 // Called on request error, feedparser error or end and manually when we're 
