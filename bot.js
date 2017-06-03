@@ -46,7 +46,7 @@ module.exports = {
             }
             return indexOf.call(this, needle) > -1;
         };
-        
+
         bot.on('message', (msg) => {
             // TODO: allow use in group: if in group, every message starts with @bot
             //  (privacy activated)
@@ -82,8 +82,33 @@ module.exports = {
                             convStatusMap.set(chatId, 1)
                         } else if (message.match(/\/status\s*/)) {
                             // COMPOSE SQL TO MATCH EVERY EXISTENT QUERY
-                            bot.sendMessage(chatId, "status")
-                        } else {
+                            var query = "SELECT * FROM QUERIES WHERE Owner = ?"
+                            var text = "Your queries:";
+                            var active = "Disabled"
+                            db.all(query, chatId, function(error, rows) {
+                                rows.forEach(function(row) {
+                                    if (row.Active) active = "Enabled"
+                                    text = text + "\n\n ID: *" + row.ID + "*\n Keywords: " + row.Keywords.toString() + "\n FeedURL: `" + row.FeedURL + "` \n" + active
+                                });
+                                bot.sendMessage(chatId, text.toString(), {
+                                    parse_mode: "Markdown"
+                                })
+                            })
+
+                        } else if (message.match(/\/disable\s+[0-9]*/)) {
+                            var array = message.match(/\/disable\s*([0-9]+)/)
+                            var query = "UPDATE QUERIES SET `Active`= ? WHERE `_rowid_`=? AND Owner = ?;"
+                            db.run(query, [0, array[1], chatId], function(){
+                                bot.sendMessage(chatId, "Your query with ID "+array[1] +" was disabled.")
+                            })
+                        } else if (message.match(/\/enable\s+[0-9]*/)) {
+                            var array = message.match(/\/enable\s*([0-9]+)/)
+                            var query = "UPDATE QUERIES SET `Active`= ? WHERE `_rowid_`=? AND Owner = ?;"
+                            db.run(query, [1, array[1], chatId], function(){
+                                bot.sendMessage(chatId, "Your query with ID "+array[1] +" was enabled.")
+                            })
+                        }
+                        else {
                             bot.sendMessage(chatId, errorText_1)
                         }
                         break;
