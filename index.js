@@ -5,7 +5,10 @@ var request = require('request'),
     schedule = require('node-schedule'),
     sqlite3 = require('sqlite3').verbose(),
     HashMap = require('hashmap'),
-    stripTags = require('striptags');
+    stripTags = require('striptags'),
+    colors = require('colors');
+
+console.log('RSS Notifier started'.green); // outputs green text
 
 // Element is in array helper function
 var contains = function(needle) {
@@ -36,8 +39,7 @@ var botUI = require('./bot.js'),
 
 const TelegramBot = require('node-telegram-bot-api');
 var db = new sqlite3.Database('db.sqlite');
-// Element number
-var i = 0;
+
 var feeds = new HashMap();
 var cachedFeeds = new HashMap;
 // Telegram bot. Polling to fetch new messages
@@ -87,6 +89,38 @@ function getParams(str) {
     return params;
 }
 
+function getNewElements(url) {
+    var newElements = [];
+    var Feed = feeds.get(url)
+
+    // console.log(cachedFeeds.get(url))
+    if (cachedFeeds.get(url)) {
+        Feed.forEach(function(post) {
+            if (!contains.call(cachedFeeds.get(url), post.title)) 
+                newElements.push(post)
+        });
+        if (newElements.length > 0) {
+            cachedFeeds.set(url, new Array());
+            Feed.forEach(function(post) {
+                cachedFeeds.get(url).push(post.title);
+            })
+            console.log("Feed updated, " + newElements.length.toString().inverse + " new elements")
+        }
+        else {
+            console.log("No updates")
+        }
+    }
+    else {
+        console.log("Initializing".inverse +" a new feed")
+        cachedFeeds.set(url, new Array());
+        Feed.forEach(function(post) {
+            cachedFeeds.get(url).push(post.title);
+        })
+    }
+
+    return newElements;
+}
+
 // contains.call(config.whitelist, chatId))
 // Serious shit
 function getFeeds() {
@@ -95,6 +129,7 @@ function getFeeds() {
     var gf_Query_Params = [1];
     db.all(gf_Query, gf_Query_Params, function(error, rows) {
         if (rows.length == 0) console.log("No feeds")
+        console.log(rows.length.toString().inverse + " feed(s) to parse")
         rows.forEach(function(row) {
             // Try to fetch current URL and handle errors or bad response status codes
             fetch(row.FeedURL);
@@ -179,7 +214,8 @@ function fetch(url) {
                     var rq_Query_Params = [url, 1];
                     db.all(rq_Query, rq_Query_Params, function(error, rows) {
                         //console.log(rows)
-                        console.log("Fetching " + url)
+                        console.log("Fetching " + url + " and checking " + rows.length.toString().inverse + " queries")
+                        
                         feeds.set(url, new Array());
                         feedparser.on('readable', function() {
                             var post;
@@ -189,15 +225,18 @@ function fetch(url) {
 
                         });
                         feedparser.on('end', function(){
-                            console.log("Feed " + url + "ready. Checking new elements")
+                            //console.log("Feed " + url + "ready. Checking new elements")
                             // console.log(feeds.get(url))
-                            console.log(rows)
-                            // var newElements = doThings(feeds.get(url), cachedFeeds.get(url));
-                            // newElements.forEach(function(element)){
-                            //  rows.forEach(function(row) {
-                            //      match(post, row.keywordGroup, row.Owner);
-                            //  });   
-                            // } 
+                            //console.log(rows)
+                            
+                            // console.log(feeds.get(url)[0])
+                            var newElements = getNewElements(url);
+                            //console.log(newElements)
+                            newElements.forEach(function(element){
+                              rows.forEach(function(row) {
+                                  match(post, row.keywordGroup, row.Owner);
+                              });   
+                            }); 
                         });
                     });
                     break;

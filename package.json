@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/avivace/rssnotifier#readme",
   "devDependencies": {
+    "colors": "^1.1.2",
     "feedparser": "^2.2.0",
     "hashmap": "^2.1.0",
     "iconv": "^2.2.3",
