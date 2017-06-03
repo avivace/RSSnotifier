@@ -8,7 +8,7 @@ var request = require('request'),
     stripTags = require('striptags'),
     colors = require('colors');
 
-console.log('RSS Notifier started'.green); // outputs green text
+console.log('RSS Notifier started'.green.bold); // outputs green text
 
 // Element is in array helper function
 var contains = function(needle) {
@@ -111,11 +111,11 @@ function getNewElements(url) {
         }
     }
     else {
-        console.log("Initializing".inverse +" a new feed")
         cachedFeeds.set(url, new Array());
         Feed.forEach(function(post) {
             cachedFeeds.get(url).push(post.title);
         })
+        console.log("Initialized".inverse +" a new feed")
     }
 
     return newElements;
@@ -214,7 +214,7 @@ function fetch(url) {
                     var rq_Query_Params = [url, 1];
                     db.all(rq_Query, rq_Query_Params, function(error, rows) {
                         //console.log(rows)
-                        console.log("Fetching " + url + " and checking " + rows.length.toString().inverse + " queries")
+                        console.log("Fetching " + url.italic + " and checking " + rows.length.toString().inverse + " queries")
                         
                         feeds.set(url, new Array());
                         feedparser.on('readable', function() {
@@ -234,7 +234,7 @@ function fetch(url) {
                             //console.log(newElements)
                             newElements.forEach(function(element){
                               rows.forEach(function(row) {
-                                  match(post, row.keywordGroup, row.Owner);
+                                  match(element, row.keywordGroup, row.Owner);
                               });   
                             }); 
                         });

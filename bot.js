@@ -47,7 +47,7 @@ module.exports = {
             //  (privacy activated)
             const chatId = msg.chat.id;
             const message = msg.text;
-            console.log("---")
+            console.log("---".cyan.bold)
             console.log(chatId + " : " + message)
 
             if (!convStatusMap.get(chatId))
@@ -136,6 +136,8 @@ module.exports = {
                 console.log("Denied")
                 bot.sendMessage(chatId, whitelistDenyText + " chatId: " + chatId)
             }
+        console.log("---".cyan.bold)
         });
+    
     }
 };
