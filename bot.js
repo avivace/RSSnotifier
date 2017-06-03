@@ -19,7 +19,29 @@ module.exports = {
         var tempArrayMap = new HashMap();
         // Initial conversation handler status
         var status = 0;
-
+        // Element is in array helper function
+        var contains = function(needle) {
+            // Per spec, the way to identify NaN is that it is not equal to itself
+            var findNaN = needle !== needle;
+            var indexOf;
+            if (!findNaN && typeof Array.prototype.indexOf === 'function') {
+                indexOf = Array.prototype.indexOf;
+            } else {
+                indexOf = function(needle) {
+                    var i = -1,
+                        index = -1;
+                    for (i = 0; i < this.length; i++) {
+                        var item = this[i];
+                        if ((findNaN && item !== item) || item === needle) {
+                            index = i;
+                            break;
+                        }
+                    }
+                    return index;
+                };
+            }
+            return indexOf.call(this, needle) > -1;
+        };
         bot.on('message', (msg) => {
             // TODO: allow use in group: if in group, every message starts with @bot
             //  (privacy activated)

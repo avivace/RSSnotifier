@@ -6,9 +6,35 @@ var request = require('request'),
     sqlite3 = require('sqlite3').verbose(),
     HashMap = require('hashmap'),
     stripTags = require('striptags');
+
+// Element is in array helper function
+var contains = function(needle) {
+    // Per spec, the way to identify NaN is that it is not equal to itself
+    var findNaN = needle !== needle;
+    var indexOf;
+    if (!findNaN && typeof Array.prototype.indexOf === 'function') {
+        indexOf = Array.prototype.indexOf;
+    } else {
+        indexOf = function(needle) {
+            var i = -1,
+                index = -1;
+            for (i = 0; i < this.length; i++) {
+                var item = this[i];
+                if ((findNaN && item !== item) || item === needle) {
+                    index = i;
+                    break;
+                }
+            }
+            return index;
+        };
+    }
+    return indexOf.call(this, needle) > -1;
+};
+
 var botUI = require('./bot.js'),
-    config = require('./config.js'),
-    const TelegramBot = require('node-telegram-bot-api');
+    config = require('./config.js');
+
+const TelegramBot = require('node-telegram-bot-api');
 var db = new sqlite3.Database('db.sqlite');
 // Element number
 var i = 0;
@@ -60,29 +86,7 @@ function getParams(str) {
     }, {});
     return params;
 }
-// Element is in array helper function
-var contains = function(needle) {
-    // Per spec, the way to identify NaN is that it is not equal to itself
-    var findNaN = needle !== needle;
-    var indexOf;
-    if (!findNaN && typeof Array.prototype.indexOf === 'function') {
-        indexOf = Array.prototype.indexOf;
-    } else {
-        indexOf = function(needle) {
-            var i = -1,
-                index = -1;
-            for (i = 0; i < this.length; i++) {
-                var item = this[i];
-                if ((findNaN && item !== item) || item === needle) {
-                    index = i;
-                    break;
-                }
-            }
-            return index;
-        };
-    }
-    return indexOf.call(this, needle) > -1;
-};
+
 // contains.call(config.whitelist, chatId))
 // Serious shit
 function getFeeds() {
@@ -169,23 +173,31 @@ function fetch(url) {
                     res = maybeTranslate(res, charset);
                     res.pipe(feedparser);
                     feedparser.on('error', feedParseDone);
-                    feedparser.on('end', feedParseDone);
+
                     // Select every active query (and its owner) for current feed
                     var rq_Query = 'SELECT Owner, Keywords AS keywordGroup FROM QUERIES where FeedURL = ? AND Active = ?';
                     var rq_Query_Params = [url, 1];
                     db.all(rq_Query, rq_Query_Params, function(error, rows) {
+                        //console.log(rows)
                         console.log("Fetching " + url)
-                        feedparser.on('readable', function(url) {
+                        feeds.set(url, new Array());
+                        feedparser.on('readable', function() {
                             var post;
-                            console.log(url)
-                            feeds.set(url, new Array());
-                            while (post = this.read) {
+                            while (post = this.read()) {
                                 feeds.get(url).push(post);
                             }
-                            // doThings(feeds.get(url), cachedFeeds.get(url));
+
+                        });
+                        feedparser.on('end', function(){
+                            console.log("Feed " + url + "ready. Checking new elements")
+                            // console.log(feeds.get(url))
+                            console.log(rows)
+                            // var newElements = doThings(feeds.get(url), cachedFeeds.get(url));
+                            // newElements.forEach(function(element)){
                             //  rows.forEach(function(row) {
-                            //  match(post, row.keywordGroup, row.Owner);
-                            //  });
+                            //      match(post, row.keywordGroup, row.Owner);
+                            //  });   
+                            // } 
                         });
                     });
                     break;
@@ -197,7 +209,8 @@ function fetch(url) {
 }
 // Called on request error, feedparser error or end and manually when we're
 //  skipping the feed processing
-function feedParseDone(err) {
+function feedParseDone(err, rows) {
+    //console.log(rows)
     if (err) {
         console.log(err, err.stack);
         return process.exit(1);
