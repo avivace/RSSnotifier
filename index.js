@@ -8,8 +8,6 @@ var request = require('request'),
     stripTags = require('striptags'),
     colors = require('colors');
 
-console.log('RSS Notifier started'.green.bold); // outputs green text
-
 // Element is in array helper function
 var contains = function(needle) {
     // Per spec, the way to identify NaN is that it is not equal to itself
@@ -34,6 +32,11 @@ var contains = function(needle) {
     return indexOf.call(this, needle) > -1;
 };
 
+// Declaring console logging level
+// 0: User mode
+// 1: Dev mode
+var debugLevel = 0;
+
 var botUI = require('./bot.js'),
     config = require('./config.js');
 
@@ -47,6 +50,20 @@ const bot = new TelegramBot(config.token, {
     polling: true
 });
 // Helper Functions
+// Managing console.log based on current debug level
+function log() {
+    // Get all argmuments passed to log() function
+    // and push them into args array
+    var args = Array.prototype.slice.call(arguments);
+    // Pop last element of args array out and set it
+    // as target debug level
+    var level = args.pop();
+    // If current debug level is greater than current debug level (or equal),
+    // log in the console.
+    if (level <= debugLevel)
+        console.log.apply(console, args);
+}
+
 // Feed Parsing
 function maybeDecompress(res, encoding) {
     var decompress;
@@ -64,7 +81,7 @@ function maybeTranslate(res, charset) {
     if (!iconv && charset && !/utf-*8/i.test(charset)) {
         try {
             iconv = new Iconv(charset, 'utf-8');
-            console.log('Converting from charset %s to utf-8', charset);
+            log('Converting from charset %s to utf-8', charset, 0);
             iconv.on('error', done);
             // If we're using iconv, stream will be the output of iconv
             // otherwise it will remain the output of request
@@ -93,7 +110,7 @@ function getNewElements(url) {
     var newElements = [];
     var Feed = feeds.get(url)
 
-    // console.log(cachedFeeds.get(url))
+    log(cachedFeeds.get(url), 1)
     if (cachedFeeds.get(url)) {
         Feed.forEach(function(post) {
             if (!contains.call(cachedFeeds.get(url), post.title)) 
@@ -104,10 +121,10 @@ function getNewElements(url) {
             Feed.forEach(function(post) {
                 cachedFeeds.get(url).push(post.title);
             })
-            console.log("Feed updated, " + newElements.length.toString().inverse + " new elements")
+            log("Feed updated, " + newElements.length.toString().inverse + " new elements", 0)
         }
         else {
-            console.log("No updates")
+            log("No updates", 0)
         }
     }
     else {
@@ -115,7 +132,7 @@ function getNewElements(url) {
         Feed.forEach(function(post) {
             cachedFeeds.get(url).push(post.title);
         })
-        console.log("Initialized".inverse +" a new feed")
+        log("Initialized".inverse +" a new feed", 0)
     }
 
     return newElements;
@@ -128,8 +145,8 @@ function getFeeds() {
     var gf_Query = 'SELECT DISTINCT FeedURL from QUERIES where Active = ?';
     var gf_Query_Params = [1];
     db.all(gf_Query, gf_Query_Params, function(error, rows) {
-        if (rows.length == 0) console.log("No feeds")
-        console.log(rows.length.toString().inverse + " feed(s) to parse")
+        if (rows.length == 0) log("No feeds", 0)
+            log(rows.length.toString().inverse + " feed(s) to parse", 0)
         rows.forEach(function(row) {
             // Try to fetch current URL and handle errors or bad response status codes
             fetch(row.FeedURL);
@@ -160,12 +177,12 @@ function match(post, queryKeywords, chatId) {
     if (matchStillValid) {
         // TODO: prevalid Feed-relative hardcoded values and avoid composing
         //  the notification message with invalid ones
-        console.log("Matched!")
+        log("Matched!", 0)
             // Stripping HTML code from description to avoid Telegram complaining,
             // it possibly needs addition of allowed tags
         var description = stripTags(post["rss:description"]["#"]);
         var link = post["rss:link"]["#"]
-        console.log("Matched " + title + ".Sending notification to " + chatId + ".")
+        log("Matched " + title + ".Sending notification to " + chatId + ".", 0)
         bot.sendMessage(chatId, "<b>New match!</b> \n" + title + "\n" + description + "\n" + link, {
             parse_mode: "HTML"
         })
@@ -187,16 +204,16 @@ function fetch(url) {
         // HANDLERS
         // Handle request error
         req.on('error', function(err) {
-            console.log('ERROR:', err.code, 'on', url, '- Not a valid URL - Aborting feed...\n')
+            log('ERROR:', err.code, 'on', url, '- Not a valid URL - Aborting feed...\n', 0)
         });
         // Handle bad response status codes and, in case of status code 200, go on parsing the feed
         req.on('response', function(res) {
             switch (res.statusCode) {
                 case 500:
-                    console.log('ERROR: Status Code', res.statusCode, '- INTERNAL SERVER ERROR on', url, '- Aborting feed...\n');
+                    log('ERROR: Status Code', res.statusCode, '- INTERNAL SERVER ERROR on', url, '- Aborting feed...\n', 0);
                     break;
                 case 404:
-                    console.log('ERROR: Status Code', res.statusCode, '- FEED NOT FOUND on', url, '- Aborting feed...\n');
+                    log('ERROR: Status Code', res.statusCode, '- FEED NOT FOUND on', url, '- Aborting feed...\n', 0);
                     break;
                 case 200:
                     // No request error, fetch the feed and try parsing it!
@@ -213,8 +230,8 @@ function fetch(url) {
                     var rq_Query = 'SELECT Owner, Keywords AS keywordGroup FROM QUERIES where FeedURL = ? AND Active = ?';
                     var rq_Query_Params = [url, 1];
                     db.all(rq_Query, rq_Query_Params, function(error, rows) {
-                        //console.log(rows)
-                        console.log("Fetching " + url.italic + " and checking " + rows.length.toString().inverse + " queries")
+                        log(rows, 1)
+                        log("Fetching " + url.italic + " and checking " + rows.length.toString().inverse + " queries", 0)
                         
                         feeds.set(url, new Array());
                         feedparser.on('readable', function() {
@@ -225,13 +242,13 @@ function fetch(url) {
 
                         });
                         feedparser.on('end', function(){
-                            //console.log("Feed " + url + "ready. Checking new elements")
-                            // console.log(feeds.get(url))
-                            //console.log(rows)
+                            log("Feed " + url + "ready. Checking new elements", 1)
+                            log(feeds.get(url), 1)
+                            log(rows, 1)
                             
-                            // console.log(feeds.get(url)[0])
+                            log(feeds.get(url)[0], 1)
                             var newElements = getNewElements(url);
-                            //console.log(newElements)
+                            log(newElements, 1)
                             newElements.forEach(function(element){
                               rows.forEach(function(row) {
                                   match(element, row.keywordGroup, row.Owner);
@@ -243,19 +260,21 @@ function fetch(url) {
             }
         });
     } catch (err) {
-        console.log('ERROR:', err.message, '- Aborting feed...\n');
+        log('ERROR:', err.message, '- Aborting feed...\n', 0);
     }
 }
 // Called on request error, feedparser error or end and manually when we're
 //  skipping the feed processing
 function feedParseDone(err, rows) {
-    //console.log(rows)
+    log(rows, 1)
     if (err) {
-        console.log(err, err.stack);
+        log(err, err.stack, 0);
         return process.exit(1);
     }
 }
 // DO THINGS
+log('RSS Notifier started'.green.bold, 0); // outputs green text
+
 // Bot up and running
 botUI.start(db, bot, config, HashMap)
     // Run the entire thing every 5 seconds
