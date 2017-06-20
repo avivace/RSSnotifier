@@ -58,8 +58,8 @@ function log() {
     // Pop last element of args array out and set it
     // as target debug level
     var level = args.pop();
-    // If current debug level is greater than current debug level (or equal),
-    // log in the console.
+    // If target debug level (of current log() call) is covered by current
+    // global debug level then log in the console.
     if (level <= debugLevel)
         console.log.apply(console, args);
 }

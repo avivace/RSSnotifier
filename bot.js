@@ -78,15 +78,16 @@ module.exports = {
                         } else if (message.match(/\/status\s*/)) {
                             // COMPOSE SQL TO MATCH EVERY EXISTENT QUERY
                             var query = "SELECT * FROM QUERIES WHERE Owner = ?"
-                            var text = "Your queries:";
-                            var active = "Disabled"
+                            var text = "<b>YOUR QUERIES:</b>" + "\n--------------------------";
                             db.all(query, chatId, function(error, rows) {
                                 rows.forEach(function(row) {
-                                    if (row.Active) active = "Enabled"
-                                    text = text + "\n\n ID: *" + row.ID + "*\n Keywords: " + row.Keywords.toString() + "\n FeedURL: `" + row.FeedURL + "` \n" + active
+                                    var polishedKeywords = '"' + JSON.parse(row.Keywords).join('", "') + '"'
+                                    var active = "<i>Disabled</i>"
+                                    if (row.Active) active = "<b>Enabled</b>"
+                                    text = text + "\n\nID: <b>" + row.ID + "</b>\nKeywords: " + polishedKeywords + "\nFeedURL: " + row.FeedURL + " \n" + active
                                 });
-                                bot.sendMessage(chatId, text.toString(), {
-                                    parse_mode: "Markdown"
+                                bot.sendMessage(chatId, text, {
+                                    parse_mode: "HTML"
                                 })
                             })
 
