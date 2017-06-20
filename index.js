@@ -8,6 +8,8 @@ var request = require('request'),
     stripTags = require('striptags'),
     colors = require('colors');
 
+// TODO: pass api token as env variable
+
 // Element is in array helper function
 var contains = function(needle) {
     // Per spec, the way to identify NaN is that it is not equal to itself
