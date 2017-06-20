@@ -42,6 +42,7 @@ module.exports = {
             }
             return indexOf.call(this, needle) > -1;
         };
+        // Inline keyboards? 
         bot.on('message', (msg) => {
             // TODO: allow use in group: if in group, every message starts with @bot
             //  (privacy activated)
