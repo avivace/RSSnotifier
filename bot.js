@@ -9,14 +9,18 @@ module.exports = {
         const helpText = "Yay, commands and w/e"
         const cancelText = "Yay, aborting all efforts"
         const addqueryText_0 = "Great! Send me a list of keywords separated by a single space. Like this: `Doctor` `Who`"
-        const addqueryText_1 = "Gotcha. Now send me the Feed URL"
+        const addqueryText_1A = "Gotcha. Now send me the Feed URL"
+        const addqueryText_1B = "Gotcha. Now send me the Feed URL or choose an URL you've alreay sent"
         const addqueryText_2 = "Yay. I've added the query to your account. You will receive notifications on matching elements"
+        const addqueryText_3 = "Sorry, you have already made your choice, please start over with\n/addquery"
         const whitelistDenyText = "You are not allowed to use this bot. Sorry."
 
         // Holds the current conversation state per user
         var convStatusMap = new HashMap();
         // Holds the Keyword array for the last phase of /addquery conversation
         var tempArrayMap = new HashMap();
+        // Holds current conversation context to know how to respond on next step
+        var convContext = new HashMap();
         // Initial conversation handler status
         var status = 0;
         // Element is in array helper function
@@ -42,6 +46,23 @@ module.exports = {
             }
             return indexOf.call(this, needle) > -1;
         };
+
+        function resetConversation(chatId) {
+            // TODO: pre validate URL: regex + try to see if it's valid
+            // Reset conversation status and context for current user
+            convStatusMap.set(chatId, 0)
+            convContext.remove(chatId)
+        }
+
+        function storeUserQuery(chatId,FeedURL) {
+            // At the end of /addquery command, either with manual typing of URL
+            // or using an inline button, store current query and feed in db and
+            // notify the user
+            bot.sendMessage(chatId, addqueryText_2)
+            // TODO: check again if we're inserting valid values
+            db.run("INSERT INTO `QUERIES`(`ID`,`Keywords`,`Owner`,`FeedURL`,`Active`) VALUES (NULL,?,?,?, 1)", tempArrayMap.get(chatId), chatId, FeedURL);
+        }
+
         // Inline keyboards? 
         bot.on('message', (msg) => {
             // TODO: allow use in group: if in group, every message starts with @bot
@@ -62,9 +83,10 @@ module.exports = {
                     // Fallback /cancel
                 if (message.match(/\/cancel\s*/)) {
                     bot.sendMessage(chatId, cancelText);
-                    convStatusMap.set(chatId, 0)
+                    resetConversation(chatId);
                 }
                 // Conversation Handling
+                var context = convContext.get(chatId);
                 switch (status) {
                     case 0:
                         if (message.match(/\/start\s*/))
@@ -76,6 +98,7 @@ module.exports = {
                                 parse_mode: "Markdown"
                             })
                             convStatusMap.set(chatId, 1)
+                            convContext.set(chatId, 'addquery')
                         } else if (message.match(/\/status\s*/)) {
                             // COMPOSE SQL TO MATCH EVERY EXISTENT QUERY
                             var query = "SELECT * FROM QUERIES WHERE Owner = ?"
@@ -113,30 +136,102 @@ module.exports = {
                     case 1:
                         // TODO: pre validate message (only words and spaces)
                         if (message.match(/[A-Za-z\s0-9]*/)) {
-                            var array = JSON.stringify(message.split(' '));
-                            convStatusMap.set(chatId, 2)
-                            tempArrayMap.set(chatId, array)
-                            bot.sendMessage(chatId, addqueryText_1)
+                            // Choose behavior for this conversation step based on current
+                            // conversation context
+                            if (context == 'addquery') {
+                                // Select all different Feeds this user already stored so we can suggest them 
+                                // to him usign inline buttons
+                                var rq_Query = 'SELECT ID,FeedURL FROM QUERIES where Owner = ? GROUP BY FeedURL';
+                                var rq_Query_Params = [chatId];
+                                db.all(rq_Query, rq_Query_Params, function(error, rows) {
+                                    // Prepare inline_keyboard
+                                    var inline_keyboard = [];
+                                    var textToUser = addqueryText_1A;
+                                    var options = {}
+                                    // If this user has at least 1 feed already stored...
+                                    if (rows.length > 0) {
+                                        textToUser = addqueryText_1B;
+                                        // ...build an inline button with that feed data and push it into inline_keyboard array
+                                        rows.forEach(function(row) {
+                                            var callback_data = JSON.stringify({
+                                                context: context,
+                                                feedId: row.ID
+                                                // Passing row.ID (and not entire URL) thus needing another query after callback 
+                                                // beacuse of Telegram 64 bytes limit on callback_data
+                                            })
+                                            // ...BUILDING THE KEYBOARD...
+                                            inline_keyboard.push( [{ text: row.FeedURL, callback_data: callback_data }] )
+                                        });
+                                        // Correctly format current message reply (keyboard)
+                                        options.reply_markup = JSON.stringify({
+                                                inline_keyboard: inline_keyboard
+                                        })
+                                    }
+                                    var array = JSON.stringify(message.split(' '));
+                                    convStatusMap.set(chatId, 2)
+                                    tempArrayMap.set(chatId, array)
+                                    bot.sendMessage(chatId, textToUser, options)
+
+                                });
+                            }
                         } else {
                             bot.sendMessage(chatId, errorText_0)
                         }
                         break;
 
                     case 2:
-                        // TODO: pre validate URL: regex + try to see if it's valid
-                        convStatusMap.set(chatId, 0)
-                        bot.sendMessage(chatId, addqueryText_2)
-                            // TODO: check again if we're inserting valid values
-                        db.run("INSERT INTO `QUERIES`(`ID`,`Keywords`,`Owner`,`FeedURL`,`Active`) VALUES (NULL,?,?,?, 1)", tempArrayMap.get(chatId), chatId, message);
+                        if (context == 'addquery') {
+                            // At this point we have a manually entered URL, let's store it
+                            // along with its query and reset the conversation
+                            resetConversation(chatId);
+                            storeUserQuery(chatId,message);
+                        }
                         break;
 
                     default:
                         bot.sendMessage(chatId, errorText_2);
-                        convStatusMap.set(chatId, 0)
+                        resetConversation(chatId);
                 }
             } else {
                 console.log("Denied")
                 bot.sendMessage(chatId, whitelistDenyText + " chatId: " + chatId)
+            }
+        console.log("---".cyan.bold)
+        });
+
+        bot.on("callback_query", function(callbackQuery) {
+            //console.log(callbackQuery);
+            const data = JSON.parse(callbackQuery.data);
+            const context = data.context;
+            const feedId = data.feedId;
+            const chatId = callbackQuery.from.id;
+
+            console.log("---".cyan.bold)
+            console.log(chatId + " : Pressed Inline Button\nContext: " + context + '\nFeed ID: ' + feedId)
+            console.log("C Status:" + convStatusMap.get(chatId))
+
+            switch (context) {
+                // Again choosing behavior based on context...
+                case 'addquery':
+                    // Check if this button can be used at this moment
+                    if (convStatusMap.get(chatId)) {
+                        // Retrieve wanted URL through Feed ID (damn Telegram!!! :P)
+                        var feed_Query = 'SELECT FeedURL FROM QUERIES WHERE ID = ?';
+                        var feed_Query_Params = [feedId];
+                        db.get(feed_Query,feed_Query_Params,function(err,row) {
+                            // Once we have the URL we wanted let's store it along with its query,
+                            // reset the conversation and close the callback
+                            resetConversation(chatId)
+                            storeUserQuery(chatId,row.FeedURL);
+                            bot.answerCallbackQuery(callbackQuery.id,null,1)
+                        });
+                    } else {
+                        // Whoops! This button is not to be used now,
+                        // notify the user and reset the conversation!
+                        bot.answerCallbackQuery(callbackQuery.id,null,1)
+                        bot.sendMessage(chatId, addqueryText_3);
+                    }
+                break;
             }
         console.log("---".cyan.bold)
         });
