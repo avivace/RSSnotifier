@@ -86,6 +86,8 @@ module.exports = {
                 console.log("Allowed")
                     // Fallback /cancel
                 if (message.match(/\/cancel\s*/)) {
+                    // If status is 0, there's nothing to abort, let's reset anyway (for now)
+                    // but notify the user with a differente message (in switch statement)
                     if (status != 0) bot.sendMessage(chatId, cancelText);
                     resetConversation(chatId);
                 }
@@ -163,6 +165,7 @@ module.exports = {
                                 }
                             });
                         } else if (message.match(/\/cancel\s*$/)) {
+                            // Notify the user, we've got nothing to abort
                             bot.sendMessage(chatId, errorText_3)
                         } else {
                             bot.sendMessage(chatId, errorText_1)
@@ -210,6 +213,8 @@ module.exports = {
 
                                 });
                             } else if (context == 'enable' || context == 'disable') {
+                                // With enable/disable context on step 1 the user can only use 
+                                // an inline button or /cancel, if we receive text let's explain this to him
                                 bot.sendMessage(chatId, errorText_0)
                             }
                         } else {
@@ -275,14 +280,21 @@ module.exports = {
                 case 'disable':
                     // Check if this button can be used at this moment
                     if (convStatusMap.get(chatId) == 1) { 
+                        // Set the correct query wanted status based on passed context:
+                        // we want to set status 0 for disable context, and 1 for enable
                         var queryWantedStatus = (context == 'enable') ? 1 : 0;
+                        // Get info about the feed we're going to enable/disable, this is needed for
+                        // bot reply message (more explicit)
                         var gf_Query = 'SELECT Keywords as keywordGroup,FeedURL FROM QUERIES WHERE ID = ?'
                         var gf_Query_Params = [rowId]
                         db.get(gf_Query,gf_Query_Params, function(err,row) {
+                            // Now that we've got all the info, let's procede and enable/disable the query
                             var updateQuery = "UPDATE QUERIES SET `Active`= ? WHERE `_rowid_`=? AND Owner = ?;"
                             db.run(updateQuery, [queryWantedStatus, rowId, chatId], function(){
+                                // Reset the conversation and close the callback
                                 bot.answerCallbackQuery(callbackQuery.id,null,1)
                                 resetConversation(chatId)
+                                // Notify the user with info about enabled/disable query
                                 bot.sendMessage(chatId, "Your query\n<b>" + row.keywordGroup + "</b>\non feed\n" + row.FeedURL + "\nwas <b>" + context + "d</b>!",{
                                     parse_mode: 'HTML'
                                 });
