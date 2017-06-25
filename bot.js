@@ -5,6 +5,7 @@ module.exports = {
         const errorText_0 = "Mh, something went wrong. Retry the last phase or /cancel to start over"
         const errorText_1 = "Command unrecognised. See /help"
         const errorText_2 = "Something unexpected happened. Please restart from the beginning."
+        const errorText_3 = "Nothing in progress... Nothing to cancel :P"
         const startText = "Yay, welcome and w/e"
         const helpText = "Yay, commands and w/e"
         const cancelText = "Yay, aborting all efforts"
@@ -14,6 +15,9 @@ module.exports = {
         const addqueryText_2 = "Yay. I've added the query to your account. You will receive notifications on matching elements"
         const addqueryText_3 = "Sorry, you have already made your choice, please start over with\n/addquery"
         const whitelistDenyText = "You are not allowed to use this bot. Sorry."
+        const enableDisableText_0 = "Sorry! You don't have any query to"
+        const enableDisableText_1 = "Good! Which one of the queries below do you want to"
+        const enableDisableText_2 = "Sorry, you have already made your choice, please start over with\n/"
 
         // Holds the current conversation state per user
         var convStatusMap = new HashMap();
@@ -82,7 +86,9 @@ module.exports = {
                 console.log("Allowed")
                     // Fallback /cancel
                 if (message.match(/\/cancel\s*/)) {
-                    bot.sendMessage(chatId, cancelText);
+                    // If status is 0, there's nothing to abort, let's reset anyway (for now)
+                    // but notify the user with a differente message (in switch statement)
+                    if (status != 0) bot.sendMessage(chatId, cancelText);
                     resetConversation(chatId);
                 }
                 // Conversation Handling
@@ -115,20 +121,53 @@ module.exports = {
                                 })
                             })
 
-                        } else if (message.match(/\/disable\s+[0-9]*/)) {
-                            var array = message.match(/\/disable\s*([0-9]+)/)
-                            var query = "UPDATE QUERIES SET `Active`= ? WHERE `_rowid_`=? AND Owner = ?;"
-                            db.run(query, [0, array[1], chatId], function(){
-                                bot.sendMessage(chatId, "Your query with ID "+array[1] +" was disabled.")
-                            })
-                        } else if (message.match(/\/enable\s+[0-9]*/)) {
-                            var array = message.match(/\/enable\s*([0-9]+)/)
-                            var query = "UPDATE QUERIES SET `Active`= ? WHERE `_rowid_`=? AND Owner = ?;"
-                            db.run(query, [1, array[1], chatId], function(){
-                                bot.sendMessage(chatId, "Your query with ID "+array[1] +" was enabled.")
-                            })
-                        }
-                        else {
+                        } else if (message.match(/\/(enable|disable)\s*$/)) {
+                            var array = message.match(/\/(enable|disable)\s*$/)
+                            var commandText = array[1];
+                            var queryTargetStatus = (commandText == 'enable') ? 0 : 1;
+
+                            var gf_Query = 'SELECT ID,FeedURL,Keywords AS keywordGroup FROM QUERIES WHERE Owner = ? AND Active = ?'
+                            var gf_Query_Params = [chatId,queryTargetStatus]
+                            db.all(gf_Query,gf_Query_Params, function(err,rows){
+
+                                if (rows.length > 0) {
+
+                                    convStatusMap.set(chatId,1);
+                                    convContext.set(chatId,commandText)
+
+                                    // Prepare inline_keyboard
+                                    var inline_keyboard = [];
+                                    var options = {}
+                                    
+                                    // ...build an inline b*utton with that feed data and push it into inline_keyboard array
+                                    rows.forEach(function(row) {
+                                        var callback_data = JSON.stringify({
+                                            context: commandText,
+                                            rowId : row.ID
+                                            // Passing row.ID (and not entire URL) thus needing another query after callback 
+                                            // beacuse of Telegram 64 bytes limit on callback_data
+                                        })
+                                        // ...BUILDING THE KEYBOARD...
+                                        inline_keyboard.push( [{ text: row.keywordGroup + ' on ' + row.FeedURL, callback_data: callback_data }] )
+                                    });
+                                    // Correctly format current message reply (keyboard)
+                                    options.reply_markup = JSON.stringify({
+                                            inline_keyboard: inline_keyboard
+                                    })
+                                    
+                                    bot.sendMessage(chatId,enableDisableText_1 + ' ' + commandText + '?', options)
+
+                                } else {
+                                    resetConversation(chatId);
+                                    bot.sendMessage(chatId,enableDisableText_0 + ' *' + commandText + '*!', {
+                                        parse_mode : 'Markdown'
+                                    })
+                                }
+                            });
+                        } else if (message.match(/\/cancel\s*$/)) {
+                            // Notify the user, we've got nothing to abort
+                            bot.sendMessage(chatId, errorText_3)
+                        } else {
                             bot.sendMessage(chatId, errorText_1)
                         }
                         break;
@@ -155,7 +194,7 @@ module.exports = {
                                         rows.forEach(function(row) {
                                             var callback_data = JSON.stringify({
                                                 context: context,
-                                                feedId: row.ID
+                                                rowId: row.ID
                                                 // Passing row.ID (and not entire URL) thus needing another query after callback 
                                                 // beacuse of Telegram 64 bytes limit on callback_data
                                             })
@@ -173,6 +212,10 @@ module.exports = {
                                     bot.sendMessage(chatId, textToUser, options)
 
                                 });
+                            } else if (context == 'enable' || context == 'disable') {
+                                // With enable/disable context on step 1 the user can only use 
+                                // an inline button or /cancel, if we receive text let's explain this to him
+                                bot.sendMessage(chatId, errorText_0)
                             }
                         } else {
                             bot.sendMessage(chatId, errorText_0)
@@ -203,21 +246,21 @@ module.exports = {
             //console.log(callbackQuery);
             const data = JSON.parse(callbackQuery.data);
             const context = data.context;
-            const feedId = data.feedId;
+            const rowId = data.rowId;
             const chatId = callbackQuery.from.id;
 
             console.log("---".cyan.bold)
-            console.log(chatId + " : Pressed Inline Button\nContext: " + context + '\nFeed ID: ' + feedId)
+            console.log(chatId + " : Pressed Inline Button\nContext: " + context + '\nFeed ID: ' + rowId)
             console.log("C Status:" + convStatusMap.get(chatId))
 
             switch (context) {
                 // Again choosing behavior based on context...
                 case 'addquery':
                     // Check if this button can be used at this moment
-                    if (convStatusMap.get(chatId)) {
+                    if (convStatusMap.get(chatId) == 2) {
                         // Retrieve wanted URL through Feed ID (damn Telegram!!! :P)
                         var feed_Query = 'SELECT FeedURL FROM QUERIES WHERE ID = ?';
-                        var feed_Query_Params = [feedId];
+                        var feed_Query_Params = [rowId];
                         db.get(feed_Query,feed_Query_Params,function(err,row) {
                             // Once we have the URL we wanted let's store it along with its query,
                             // reset the conversation and close the callback
@@ -230,6 +273,38 @@ module.exports = {
                         // notify the user and reset the conversation!
                         bot.answerCallbackQuery(callbackQuery.id,null,1)
                         bot.sendMessage(chatId, addqueryText_3);
+                    }
+                break;
+
+                case 'enable':
+                case 'disable':
+                    // Check if this button can be used at this moment
+                    if (convStatusMap.get(chatId) == 1) { 
+                        // Set the correct query wanted status based on passed context:
+                        // we want to set status 0 for disable context, and 1 for enable
+                        var queryWantedStatus = (context == 'enable') ? 1 : 0;
+                        // Get info about the feed we're going to enable/disable, this is needed for
+                        // bot reply message (more explicit)
+                        var gf_Query = 'SELECT Keywords as keywordGroup,FeedURL FROM QUERIES WHERE ID = ?'
+                        var gf_Query_Params = [rowId]
+                        db.get(gf_Query,gf_Query_Params, function(err,row) {
+                            // Now that we've got all the info, let's procede and enable/disable the query
+                            var updateQuery = "UPDATE QUERIES SET `Active`= ? WHERE `_rowid_`=? AND Owner = ?;"
+                            db.run(updateQuery, [queryWantedStatus, rowId, chatId], function(){
+                                // Reset the conversation and close the callback
+                                bot.answerCallbackQuery(callbackQuery.id,null,1)
+                                resetConversation(chatId)
+                                // Notify the user with info about enabled/disable query
+                                bot.sendMessage(chatId, "Your query\n<b>" + row.keywordGroup + "</b>\non feed\n" + row.FeedURL + "\nwas <b>" + context + "d</b>!",{
+                                    parse_mode: 'HTML'
+                                });
+                            });
+                        });
+                    } else {
+                        // Whoops! This button is not to be used now,
+                        // notify the user and reset the conversation!
+                        bot.answerCallbackQuery(callbackQuery.id,null,1)
+                        bot.sendMessage(chatId, enableDisableText_2 + context);
                     }
                 break;
             }
