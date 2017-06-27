@@ -11,18 +11,22 @@ module.exports = {
         const cancelText = "Yay, aborting all efforts"
         const addqueryText_0 = "Great! Send me a list of keywords separated by a single space. Like this: `Doctor` `Who`"
         const addqueryText_1A = "Gotcha. Now send me the Feed URL"
-        const addqueryText_1B = "Gotcha. Now send me the Feed URL or choose an URL you've alreay sent"
+        const addqueryText_1B = "Gotcha. Now send me the Feed URL or choose an URL you've already sent"
         const addqueryText_2 = "Yay. I've added the query to your account. You will receive notifications on matching elements"
         const addqueryText_3 = "Sorry, you have already made your choice, please start over with\n/addquery"
         const whitelistDenyText = "You are not allowed to use this bot. Sorry."
         const enableDisableText_0 = "Sorry! You don't have any query to"
         const enableDisableText_1 = "Good! Which one of the queries below do you want to"
         const enableDisableText_2 = "Sorry, you have already made your choice, please start over with\n/"
+        const deleteText_0 = "Sorry, you don't have any query yet, try adding some with\n/addquery"
+        const deleteText_1 = "OK! Which one of the queries below do you want to"
+        const deleteText_2 = "Sorry, you have already made your choice, please start over with\n/"
+        const deleteText_3 = "Perfect, no worries! Nothing was deleted, wanna try again with\n/delete?"
 
         // Holds the current conversation state per user
         var convStatusMap = new HashMap();
-        // Holds the Keyword array for the last phase of /addquery conversation
-        var tempArrayMap = new HashMap();
+        // Holds data to be transfered from one step of the conversation to another
+        var stepDataTransferMap = new HashMap();
         // Holds current conversation context to know how to respond on next step
         var convContext = new HashMap();
         // Initial conversation handler status
@@ -64,7 +68,7 @@ module.exports = {
             // notify the user
             bot.sendMessage(chatId, addqueryText_2)
             // TODO: check again if we're inserting valid values
-            db.run("INSERT INTO `QUERIES`(`ID`,`Keywords`,`Owner`,`FeedURL`,`Active`) VALUES (NULL,?,?,?, 1)", tempArrayMap.get(chatId), chatId, FeedURL);
+            db.run("INSERT INTO `QUERIES`(`ID`,`Keywords`,`Owner`,`FeedURL`,`Active`) VALUES (NULL,?,?,?, 1)", stepDataTransferMap.get(chatId), chatId, FeedURL);
         }
 
         // Inline keyboards? 
@@ -129,17 +133,13 @@ module.exports = {
                             var gf_Query = 'SELECT ID,FeedURL,Keywords AS keywordGroup FROM QUERIES WHERE Owner = ? AND Active = ?'
                             var gf_Query_Params = [chatId,queryTargetStatus]
                             db.all(gf_Query,gf_Query_Params, function(err,rows){
-
                                 if (rows.length > 0) {
-
                                     convStatusMap.set(chatId,1);
                                     convContext.set(chatId,commandText)
-
                                     // Prepare inline_keyboard
                                     var inline_keyboard = [];
                                     var options = {}
-                                    
-                                    // ...build an inline b*utton with that feed data and push it into inline_keyboard array
+                                    // ...build an inline button with that feed data and push it into inline_keyboard array
                                     rows.forEach(function(row) {
                                         var callback_data = JSON.stringify({
                                             context: commandText,
@@ -154,14 +154,44 @@ module.exports = {
                                     options.reply_markup = JSON.stringify({
                                             inline_keyboard: inline_keyboard
                                     })
-                                    
                                     bot.sendMessage(chatId,enableDisableText_1 + ' ' + commandText + '?', options)
-
                                 } else {
                                     resetConversation(chatId);
                                     bot.sendMessage(chatId,enableDisableText_0 + ' *' + commandText + '*!', {
                                         parse_mode : 'Markdown'
                                     })
+                                }
+                            });
+                        } else if (message.match(/\/delete\s*$/)) {
+                            var context = 'delete';
+                            var gf_Query = 'SELECT ID,FeedURL,Keywords AS keywordGroup FROM QUERIES WHERE Owner = ?'
+                            var gf_Query_Params = [chatId]
+                            db.all(gf_Query,gf_Query_Params,function(err,rows){
+                                if (rows.length > 0) {
+                                    convStatusMap.set(chatId,1);
+                                    convContext.set(chatId,context)
+                                    // Prepare inline_keyboard
+                                    var inline_keyboard = [];
+                                    var options = { parse_mode:'Markdown' }
+                                    // ...build an inline button with that feed data and push it into inline_keyboard array
+                                    rows.forEach(function(row) {
+                                        var callback_data = JSON.stringify({
+                                            context: context,
+                                            rowId : row.ID
+                                            // Passing row.ID (and not entire URL) thus needing another query after callback 
+                                            // beacuse of Telegram 64 bytes limit on callback_data
+                                        })
+                                        // ...BUILDING THE KEYBOARD...
+                                        inline_keyboard.push( [{ text: row.keywordGroup + ' on ' + row.FeedURL, callback_data: callback_data }] )
+                                    });
+                                    // Correctly format current message reply (keyboard)
+                                    options.reply_markup = JSON.stringify({
+                                            inline_keyboard: inline_keyboard
+                                    })
+                                    bot.sendMessage(chatId,deleteText_1 + ' *' + context + '*?', options)
+                                } else {
+                                    resetConversation(chatId);
+                                    bot.sendMessage(chatId,deleteText_0);
                                 }
                             });
                         } else if (message.match(/\/cancel\s*$/)) {
@@ -208,12 +238,11 @@ module.exports = {
                                     }
                                     var array = JSON.stringify(message.split(' '));
                                     convStatusMap.set(chatId, 2)
-                                    tempArrayMap.set(chatId, array)
+                                    stepDataTransferMap.set(chatId, array)
                                     bot.sendMessage(chatId, textToUser, options)
-
                                 });
-                            } else if (context == 'enable' || context == 'disable') {
-                                // With enable/disable context on step 1 the user can only use 
+                            } else if (context == 'enable' || context == 'disable' || context == 'delete') {
+                                // With enable|disable|delete context on step 1 the user can only use 
                                 // an inline button or /cancel, if we receive text let's explain this to him
                                 bot.sendMessage(chatId, errorText_0)
                             }
@@ -228,6 +257,33 @@ module.exports = {
                             // along with its query and reset the conversation
                             resetConversation(chatId);
                             storeUserQuery(chatId,message);
+                        } else if (context == 'delete') {
+                            // If user is sure about deleting...
+                            if (message.match(/(YES)\s*$/i)) {
+                                // Let's prepare some values passed in stepDataTransferMap (Hashmap)
+                                var rowId = stepDataTransferMap.get(chatId).rowId;
+                                var keywordGroup = stepDataTransferMap.get(chatId).query;
+                                var feed = stepDataTransferMap.get(chatId).feed;
+                                // Now that we've got all the info, let's procede and delete the query
+                                var deleteQuery = "DELETE FROM QUERIES WHERE ID = ? AND Owner = ?;"
+                                db.run(deleteQuery, [rowId, chatId], function(){
+                                    // Reset the conversation
+                                    resetConversation(chatId)
+                                    // Notify the user with info about deleted query
+                                    bot.sendMessage(chatId, "Bye bye to\n<b>" + keywordGroup + "</b>\non feed\n" + feed + ".\n<b>QUERY DELETED</b>!",{
+                                        parse_mode: 'HTML'
+                                    });
+                                });
+                            // ...if not...
+                            } else if (message.match(/(NO)\s*$/i)) {
+                                // Reset conversation and reassure the user
+                                resetConversation(chatId);
+                                bot.sendMessage(chatId,deleteText_3);
+                            } else {    
+                                // With delete context on step 2 the user can only use an inline
+                                // button or /cancel, if we receive text let's explain this to him
+                                bot.sendMessage(chatId, errorText_0)
+                            }
                         }
                         break;
 
@@ -305,6 +361,41 @@ module.exports = {
                         // notify the user and reset the conversation!
                         bot.answerCallbackQuery(callbackQuery.id,null,1)
                         bot.sendMessage(chatId, enableDisableText_2 + context);
+                    }
+                break;
+
+                case 'delete':
+                    // Check if this button can be used at this moment
+                    if (convStatusMap.get(chatId) == 1) {
+                        // Get info about the feed we're going to delete, this is needed for
+                        // bot reply message (more explicit)
+                        var gf_Query = 'SELECT Keywords as keywordGroup,FeedURL FROM QUERIES WHERE ID = ?'
+                        var gf_Query_Params = [rowId]
+                        db.get(gf_Query,gf_Query_Params, function(err,row) {
+                            // Prepare for another conversation step, let's ask the user
+                            // if he's sure to delete the query he selected
+                            convStatusMap.set(chatId,2);
+                            stepDataTransferMap.set(chatId,{ rowId:rowId, query:row.keywordGroup, feed:row.FeedURL })
+                            convContext.set(chatId,context)
+                            // Prepare custom reply keyboard
+                            var keyboard = [['YES','NO']]
+                            var options = { parse_mode:'HTML'}
+                            // Correctly format current message reply (keyboard)
+                            options.reply_markup = {
+                                    keyboard: keyboard,
+                                    resize_keyboard: true,
+                                    one_time_keyboard: true
+                            };
+                            // Close callback query and ask the user to confirm query deletion
+                            bot.answerCallbackQuery(callbackQuery.id,null,1)
+                            bot.sendMessage(chatId,'<b>DELETE</b> query\n' + row.keywordGroup + '\non feed\n' + row.FeedURL + '\n<b>ARE YOU SURE?</b>', options)
+                        });
+                            
+                    } else {
+                        // Whoops! This button is not to be used now,
+                        // notify the user and reset the conversation!
+                        bot.answerCallbackQuery(callbackQuery.id,null,1)
+                        bot.sendMessage(chatId, deleteText_2 + context);
                     }
                 break;
             }
