@@ -3,12 +3,22 @@ module.exports = {
 
         // Strings
         const errorText_0 = "Mh, something went wrong. Retry the last phase or /cancel to start over"
-        const errorText_1 = "Command unrecognised. See /help"
+        const errorText_1 = "Command unrecognised. See /help for the complete list of available commands."
         const errorText_2 = "Something unexpected happened. Please restart from the beginning."
-        const errorText_3 = "Nothing in progress... Nothing to cancel :P"
-        const startText = "Yay, welcome and w/e"
-        const helpText = "Yay, commands and w/e"
-        const cancelText = "Yay, aborting all efforts"
+        const errorText_3 = "Nothing to cancel, you're good to go."
+        const startText = "Oh hey, welcome! I can send you elements from RSS feeds you provide me. You can specify a query and only matching elements will be notified. See /help for the list of available commands or start by typing `/`"
+        const helpText = "Here's the complete list of the commands you can use:\n"+
+                         "/start - Start the bot and enable notifications\n"+
+                         "/addquery - Subscribe to an RSS feed and provide keywords to match\n"+
+                         "/cancel - Cancel every running task and restart\n"+
+                         "/status - See the status of every subscription you created\n"+
+                         "/disable - Disable a subscription\n"+
+                         "/enable - Enable a subscription\n" +
+                         "/delete - Delete a subscription\n"+
+                         "/edit - Edit the mode, keywords or feed URL of a subscription\n"+
+                         "/stop - Stop the notifications\n"+
+                         "/info - Informations on the bot\n"
+        const cancelText = "The current action was canceled, you can start over."
         const addqueryText_0 = "Great! Send me a list of keywords separated by a single space. Like this: `Doctor` `Who`"
         const addqueryText_1A = "Gotcha. Now send me the Feed URL"
         const addqueryText_1B = "Gotcha. Now send me the Feed URL or choose an URL you've already sent"
@@ -22,6 +32,7 @@ module.exports = {
         const deleteText_1 = "OK! Which one of the queries below do you want to"
         const deleteText_2 = "Sorry, you have already made your choice, please start over with\n/"
         const deleteText_3 = "Perfect, no worries! Nothing was deleted, wanna try again with\n/delete?"
+        const infoText = "RSS Notifier is an open source Node application. Check the source and contribute on https://github.com/avivace/rssnotifier"
 
         // Holds the current conversation state per user
         var convStatusMap = new HashMap();
@@ -100,7 +111,9 @@ module.exports = {
                 switch (status) {
                     case 0:
                         if (message.match(/\/start\s*/))
-                            bot.sendMessage(chatId, startText);
+                            bot.sendMessage(chatId, startText, {parse_mode : 'Markdown'});
+                        else if (message.match(/\/info\s*/))
+                            bot.sendMessage(chatId, infoText, {parse_mode : 'Markdown'});
                         else if (message.match(/\/help\s*/))
                             bot.sendMessage(chatId, helpText);
                         else if (message.match(/\/addquery\s*/)) {
@@ -384,7 +397,7 @@ module.exports = {
                             options.reply_markup = {
                                     keyboard: keyboard,
                                     resize_keyboard: true,
-                                    one_time_keyboard: true
+                                    one_time_keyboard: false
                             };
                             // Close callback query and ask the user to confirm query deletion
                             bot.answerCallbackQuery(callbackQuery.id,null,1)
