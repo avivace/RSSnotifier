@@ -22,6 +22,8 @@ module.exports = {
         const deleteText_1 = "OK! Which one of the queries below do you want to"
         const deleteText_2 = "Sorry, you have already made your choice, please start over with\n/"
         const deleteText_3 = "Perfect, no worries! Nothing was deleted, wanna try again with\n/delete?"
+        const editText_0 = "Sorry, you don't have any query yet, try adding some with\n/addquery"
+        const editText_1 = "OK! Which one of the queries below do you want to"
 
         // Holds the current conversation state per user
         var convStatusMap = new HashMap();
@@ -162,6 +164,38 @@ module.exports = {
                                     })
                                 }
                             });
+                        } else if (message.match(/\/edit\s*$/)) {
+                            var context = 'edit';
+                            var gf_Query = 'SELECT ID,FeedURL,Keywords AS keywordGroup FROM QUERIES WHERE Owner = ?'
+                            var gf_Query_Params = [chatId]
+                            db.all(gf_Query,gf_Query_Params,function(err,rows) {
+                                if (rows.length > 0 ) {
+                                    convStatusMap.set(chatId,1)
+                                    convContext.set(chatId,context)
+                                    // Prepare inline_keyboard
+                                    var inline_keyboard = [];
+                                    var options = { parse_mode:'Markdown' }
+                                    // ...build an inline button with that feed data and push it into inline_keyboard array
+                                    rows.forEach(function(row) {
+                                        var callback_data = JSON.stringify({
+                                            context: context,
+                                            rowId : row.ID
+                                            // Passing row.ID (and not entire URL) thus needing another query after callback 
+                                            // beacuse of Telegram 64 bytes limit on callback_data
+                                        })
+                                        // ...BUILDING THE KEYBOARD...
+                                        inline_keyboard.push( [{ text: row.keywordGroup + ' on ' + row.FeedURL, callback_data: callback_data }] )
+                                    });
+                                    // Correctly format current message reply (keyboard)
+                                    options.reply_markup = JSON.stringify({
+                                            inline_keyboard: inline_keyboard
+                                    })
+                                    bot.sendMessage(chatId,editText_1 + ' *' + context + '*?', options)
+                                } else {
+                                    resetConversation(chatId);
+                                    bot.sendMessage(chatId,editText_0);
+                                }
+                            });
                         } else if (message.match(/\/delete\s*$/)) {
                             var context = 'delete';
                             var gf_Query = 'SELECT ID,FeedURL,Keywords AS keywordGroup FROM QUERIES WHERE Owner = ?'
@@ -241,8 +275,8 @@ module.exports = {
                                     stepDataTransferMap.set(chatId, array)
                                     bot.sendMessage(chatId, textToUser, options)
                                 });
-                            } else if (context == 'enable' || context == 'disable' || context == 'delete') {
-                                // With enable|disable|delete context on step 1 the user can only use 
+                            } else if (context == 'enable' || context == 'disable' || context == 'edit' || context == 'delete') {
+                                // With enable|disable|edit|delete context on step 1 the user can only use 
                                 // an inline button or /cancel, if we receive text let's explain this to him
                                 bot.sendMessage(chatId, errorText_0)
                             }
@@ -364,6 +398,10 @@ module.exports = {
                     }
                 break;
 
+                case 'edit':
+
+                break;
+
                 case 'delete':
                     // Check if this button can be used at this moment
                     if (convStatusMap.get(chatId) == 1) {
@@ -381,11 +419,11 @@ module.exports = {
                             var keyboard = [['YES','NO']]
                             var options = { parse_mode:'HTML'}
                             // Correctly format current message reply (keyboard)
-                            options.reply_markup = {
+                            options.reply_markup = JSON.stringify({
                                     keyboard: keyboard,
                                     resize_keyboard: true,
-                                    one_time_keyboard: true
-                            };
+                                    hide_keyboard: true
+                            });
                             // Close callback query and ask the user to confirm query deletion
                             bot.answerCallbackQuery(callbackQuery.id,null,1)
                             bot.sendMessage(chatId,'<b>DELETE</b> query\n' + row.keywordGroup + '\non feed\n' + row.FeedURL + '\n<b>ARE YOU SURE?</b>', options)
