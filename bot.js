@@ -28,6 +28,9 @@ module.exports = {
         const enableDisableText_0 = "Sorry! You don't have any query to"
         const enableDisableText_1 = "Good! Which one of the queries below do you want to"
         const enableDisableText_2 = "Sorry, you have already made your choice, please start over with\n/"
+        const editText_0 = "Sorry, you don't have any query yet, try adding some with\n/addquery"
+        const editText_1 = "OK! Which one of the queries below do you want to"
+        const editText_2 = "Sorry, you have already made your choice, please start over with\n/"
         const deleteText_0 = "Sorry, you don't have any query yet, try adding some with\n/addquery"
         const deleteText_1 = "OK! Which one of the queries below do you want to"
         const deleteText_2 = "Sorry, you have already made your choice, please start over with\n/"
@@ -181,6 +184,39 @@ module.exports = {
                                     })
                                 }
                             });
+                        } else if (message.match(/\/edit\s*$/)) {
+                            var context = 'edit';
+                            // Select all stored queries for current user so he can edit one of them
+                            var gf_Query = 'SELECT ID,FeedURL,Keywords AS keywordGroup FROM QUERIES WHERE Owner = ?'
+                            var gf_Query_Params = [chatId]
+                            db.all(gf_Query,gf_Query_Params,function(err,rows) {
+                                if (rows.length > 0 ) {
+                                    convStatusMap.set(chatId,1)
+                                    convContext.set(chatId,context)
+                                    // Prepare inline_keyboard
+                                    var inline_keyboard = [];
+                                    var options = { parse_mode:'Markdown' }
+                                    // ...build an inline button with that feed data and push it into inline_keyboard array
+                                    rows.forEach(function(row) {
+                                        var callback_data = JSON.stringify({
+                                            context: context,
+                                            rowId : row.ID
+                                            // Passing row.ID (and not entire URL) thus needing another query after callback 
+                                            // beacuse of Telegram 64 bytes limit on callback_data
+                                        })
+                                        // ...BUILDING THE KEYBOARD...
+                                        inline_keyboard.push( [{ text: row.keywordGroup + ' on ' + row.FeedURL, callback_data: callback_data }] )
+                                    });
+                                    // Correctly format current message reply (keyboard)
+                                    options.reply_markup = JSON.stringify({
+                                            inline_keyboard: inline_keyboard
+                                    })
+                                    bot.sendMessage(chatId,editText_1 + ' *' + context + '*?', options)
+                                } else {
+                                    resetConversation(chatId);
+                                    bot.sendMessage(chatId,editText_0);
+                                }
+                            });
                         } else if (message.match(/\/delete\s*$/)) {
                             var context = 'delete';
                             var gf_Query = 'SELECT ID,FeedURL,Keywords AS keywordGroup FROM QUERIES WHERE Owner = ?'
@@ -264,8 +300,8 @@ module.exports = {
                                     stepDataTransferMap.set(chatId, array)
                                     bot.sendMessage(chatId, textToUser, options)
                                 });
-                            } else if (context == 'enable' || context == 'disable' || context == 'delete') {
-                                // With enable|disable|delete context on step 1 the user can only use 
+                            } else if (context == 'enable' || context == 'disable' || context == 'edit' || context == 'delete') {
+                                // With enable|disable|edit|delete context on step 1 the user can only use 
                                 // an inline button or /cancel, if we receive text let's explain this to him
                                 bot.sendMessage(chatId, errorText_0)
                             }
@@ -280,6 +316,58 @@ module.exports = {
                             // along with its query and reset the conversation
                             resetConversation(chatId);
                             storeUserQuery(chatId,message);
+                        } else if (context == 'edit') {
+                            // Let's prepare some values passed in stepDataTransferMap (Hashmap)
+                            var rowId = stepDataTransferMap.get(chatId).rowId;
+                            var keywordGroup = stepDataTransferMap.get(chatId).query;
+                            var feed = stepDataTransferMap.get(chatId).feed;
+                            // If user  wants to edit the keywords...
+                            if (message.match(/(editkeywords)\s*$/i)) {
+                                convStatusMap.set(chatId,3)
+                                convContext.set(chatId,'editkeywords')
+                                // Send him info about current query keywords and ask him to send new ones to us...
+                                bot.sendMessage(chatId,'Perfect! Current keywords are\n*"' + JSON.parse(keywordGroup).join('", "') + '"*\nPlease, send me the new ones',{ 
+                                    parse_mode:'Markdown'
+                                });
+                            // ...if he wants to edit the feed instead...
+                            } else if (message.match(/(editfeed)\s*$/i)) {
+                                // Retrieve all feeds stored by the user different from the one of current query
+                                // (the one we're going to edit) so we can suggest them as alternatives
+                                var rq_Query = 'SELECT ID,FeedURL FROM QUERIES where Owner = ? AND FeedURL != ? GROUP BY FeedURL';
+                                var rq_Query_Params = [chatId,feed];
+                                db.all(rq_Query, rq_Query_Params, function(error, rows) {
+                                    // Prepare inline_keyboard
+                                    var inline_keyboard = [];
+                                    var options = {
+                                        parse_mode: 'HTML'
+                                    }
+                                    // If this user has at least 1 feed, different from current one, already stored...
+                                    if (rows.length > 0) {
+                                        // ...build an inline button with that feed data and push it into inline_keyboard array
+                                        rows.forEach(function(row) {
+                                            var callback_data = JSON.stringify({
+                                                context: 'edit',
+                                                rowId: row.ID
+                                                // Passing row.ID (and not entire URL) thus needing another query after callback 
+                                                // beacuse of Telegram 64 bytes limit on callback_data
+                                            })
+                                            // ...BUILDING THE KEYBOARD...
+                                            inline_keyboard.push( [{ text: row.FeedURL, callback_data: callback_data }] )
+                                        });
+                                        // Correctly format current message reply (keyboard)
+                                        options.reply_markup = JSON.stringify({
+                                                inline_keyboard: inline_keyboard
+                                        })
+                                    }
+                                    convStatusMap.set(chatId,3)
+                                    convContext.set(chatId,'editfeed')
+                                    bot.sendMessage(chatId,'Perfect! Current Feed URL is\n<b>' + feed + '</b>\nPlease, send me the new one',options);
+                                });
+
+                            } else {
+                                bot.sendMessage(chatId, errorText_0)
+                            }
+
                         } else if (context == 'delete') {
                             // If user is sure about deleting...
                             if (message.match(/(YES)\s*$/i)) {
@@ -291,7 +379,6 @@ module.exports = {
                                 var deleteQuery = "DELETE FROM QUERIES WHERE ID = ? AND Owner = ?;"
                                 db.run(deleteQuery, [rowId, chatId], function(){
                                     // Reset the conversation
-                                    resetConversation(chatId)
                                     // Notify the user with info about deleted query
                                     bot.sendMessage(chatId, "Bye bye to\n<b>" + keywordGroup + "</b>\non feed\n" + feed + ".\n<b>QUERY DELETED</b>!",{
                                         parse_mode: 'HTML'
@@ -303,11 +390,42 @@ module.exports = {
                                 resetConversation(chatId);
                                 bot.sendMessage(chatId,deleteText_3);
                             } else {    
-                                // With delete context on step 2 the user can only use an inline
-                                // button or /cancel, if we receive text let's explain this to him
                                 bot.sendMessage(chatId, errorText_0)
                             }
                         }
+                        break;
+
+                        case 3:
+                            if (message.match(/[A-Za-z\s0-9]*/)) {
+                                if (context == 'editkeywords' || context == 'editfeed') {
+                                    // Choose correct db queries based on what we are editing:
+                                    // keywords or feed?
+                                    if (context == 'editkeywords'){
+                                        var array = JSON.stringify(message.split(' '));
+                                        var updateQuery = "UPDATE QUERIES SET Keywords = ? WHERE `_rowid_`=? AND Owner = ?;"
+                                        var updateQueryParams = [array, stepDataTransferMap.get(chatId).rowId, chatId]
+                                    } else if (context == 'editfeed') {
+                                        var updateQuery = "UPDATE QUERIES SET FeedURL = ? WHERE `_rowid_`=? AND Owner = ?;"
+                                        var updateQueryParams = [message, stepDataTransferMap.get(chatId).rowId, chatId]
+                                    }
+                                    // Update DB...
+                                    db.run(updateQuery, updateQueryParams, function(){
+                                        //...and when we have finished retrieve current modified query data to notify the user
+                                        var gUpToDateInfo_Query = "SELECT Keywords as keywordGroup,FeedURL FROM QUERIES WHERE `_rowid_`=? AND Owner = ?"
+                                        var gUpToDateInfo_Query_Params = [stepDataTransferMap.get(chatId).rowId,chatId]
+                                        db.get(gUpToDateInfo_Query,gUpToDateInfo_Query_Params,function(err,row) {
+                                            // Reset the conversation
+                                            resetConversation(chatId)
+                                            // Notify the user with info about edited query
+                                            bot.sendMessage(chatId, "<b>Updated!</b>\n\nCurrent query is\n<b>" + row.keywordGroup + "</b>\non feed\n" + row.FeedURL,{
+                                                parse_mode: 'HTML'
+                                            });
+                                        }); 
+                                    });
+                                }
+                            } else {
+                                bot.sendMessage(chatId, errorText_0)
+                            }
                         break;
 
                     default:
@@ -387,6 +505,65 @@ module.exports = {
                     }
                 break;
 
+                case 'edit':
+                    // Check if this button can be used at this moment
+                    if (convStatusMap.get(chatId) == 1) { 
+                        // Get info about the query we're going to edit, this is needed for
+                        // bot reply message (more explicit)
+                        var gf_Query = 'SELECT Keywords as keywordGroup,FeedURL FROM QUERIES WHERE ID = ?'
+                        var gf_Query_Params = [rowId]
+                        db.get(gf_Query,gf_Query_Params, function(err,row) {
+                            // Set correct conversation step and context
+                            convStatusMap.set(chatId,2);
+                            convContext.set(chatId,context)
+                            // Store target query data in stepDataTransferMap Hashmap
+                            stepDataTransferMap.set(chatId,{ rowId:rowId, query:row.keywordGroup, feed:row.FeedURL })
+                            // Prepare custom reply keyboard
+                            var keyboard = [['/editkeywords','/editfeed']]
+                            var options = { parse_mode:'HTML' }
+                            // Correctly format current message reply (keyboard)
+                            options.reply_markup = JSON.stringify({
+                                    keyboard: keyboard,
+                                    resize_keyboard: true,
+                                    hide_keyboard: true
+                            });
+                            // Close callback query and ask the user if he wants to edit keywords or feed
+                            bot.answerCallbackQuery(callbackQuery.id,null,1)
+                            bot.sendMessage(chatId,'Edit query\n<b>' + row.keywordGroup + '</b>\non feed\n' + row.FeedURL + '\nWhat do you want to <b>edit</b>?', options)
+                        });
+
+                    } else if (convStatusMap.get(chatId) == 3) {
+                        // Get info about the feed we want as new feed for current "in-editing" query
+                        var gf_Query = "SELECT FeedURL FROM QUERIES WHERE `_rowid_`=? AND Owner = ?"
+                        var gf_Query_Params = [rowId,chatId]
+                        db.get(gf_Query,gf_Query_Params,function(err,row){
+                            // Update DB...
+                            var updateQuery = "UPDATE QUERIES SET FeedURL = ? WHERE `_rowid_`=? AND Owner = ?;"
+                            var updateQueryParams = [row.FeedURL, stepDataTransferMap.get(chatId).rowId, chatId]
+                            db.run(updateQuery, updateQueryParams, function() {
+                                //...and when we have finished retrieve current modified query data to notify the user
+                                var gUpToDateInfo_Query = "SELECT Keywords as keywordGroup,FeedURL FROM QUERIES WHERE `_rowid_`=? AND Owner = ?"
+                                var gUpToDateInfo_Query_Params = [stepDataTransferMap.get(chatId).rowId, chatId]
+                                db.get(gUpToDateInfo_Query, gUpToDateInfo_Query_Params, function(err, row) {
+                                    // Reset the conversation and answer callback query
+                                    resetConversation(chatId)
+                                    bot.answerCallbackQuery(callbackQuery.id,null,1)
+                                    // Notify the user with info about edited query
+                                    bot.sendMessage(chatId, "<b>Updated!</b>\n\nCurrent query is\n<b>" + row.keywordGroup + "</b>\non feed\n" + row.FeedURL, {
+                                        parse_mode: 'HTML'
+                                    });
+                                });
+                            });
+
+                        });
+                    } else {
+                        // Whoops! This button is not to be used now,
+                        // notify the user and reset the conversation!
+                        bot.answerCallbackQuery(callbackQuery.id,null,1)
+                        bot.sendMessage(chatId, editText_2 + context);
+                    }
+                break;
+
                 case 'delete':
                     // Check if this button can be used at this moment
                     if (convStatusMap.get(chatId) == 1) {
@@ -404,11 +581,12 @@ module.exports = {
                             var keyboard = [['YES','NO']]
                             var options = { parse_mode:'HTML'}
                             // Correctly format current message reply (keyboard)
-                            options.reply_markup = {
+                            options.reply_markup = JSON.stringify({
                                     keyboard: keyboard,
                                     resize_keyboard: true,
-                                    one_time_keyboard: false
-                            };
+                                    one_time_keyboard: false,
+                                    hide_keyboard: true
+                            });
                             // Close callback query and ask the user to confirm query deletion
                             bot.answerCallbackQuery(callbackQuery.id,null,1)
                             bot.sendMessage(chatId,'<b>DELETE</b> query\n' + row.keywordGroup + '\non feed\n' + row.FeedURL + '\n<b>ARE YOU SURE?</b>', options)
