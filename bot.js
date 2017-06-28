@@ -19,7 +19,7 @@ module.exports = {
                          "/stop - Stop the notifications\n"+
                          "/info - Informations on the bot\n"
         const cancelText = "The current action was canceled, you can start over."
-        const addqueryText_0 = "Great! Send me a list of keywords separated by a single space. Like this: `Doctor` `Who`"
+        const addqueryText_0 = "Great! Send me a list of keywords separated by a single space. Like this: `Doctor` `Who`. If you want the subscription to be in **ready-mode**, so you get a notification for every new message, send /skip ."
         const addqueryText_1A = "Gotcha. Now send me the Feed URL"
         const addqueryText_1B = "Gotcha. Now send me the Feed URL or choose an URL you've already sent"
         const addqueryText_2 = "Yay. I've added the query to your account. You will receive notifications on matching elements"
@@ -33,6 +33,7 @@ module.exports = {
         const deleteText_2 = "Sorry, you have already made your choice, please start over with\n/"
         const deleteText_3 = "Perfect, no worries! Nothing was deleted, wanna try again with\n/delete?"
         const infoText = "RSS Notifier is an open source Node application. Check the source and contribute on https://github.com/avivace/rssnotifier"
+        const skipText = "The subscription is in *read-mode*. "
 
         // Holds the current conversation state per user
         var convStatusMap = new HashMap();
@@ -128,10 +129,15 @@ module.exports = {
                             var text = "<b>YOUR QUERIES:</b>" + "\n--------------------------";
                             db.all(query, chatId, function(error, rows) {
                                 rows.forEach(function(row) {
-                                    var polishedKeywords = '"' + JSON.parse(row.Keywords).join('", "') + '"'
+                                    if (row.Keywords == "Everything"){
+                                        var polishedKeywords = "Everything"
+                                    }
+                                    else {
+                                        var polishedKeywords = 'Keywords: "' + JSON.parse(row.Keywords).join('", "') + '"'
+                                    }
                                     var active = "<i>Disabled</i>"
                                     if (row.Active) active = "<b>Enabled</b>"
-                                    text = text + "\n\nID: <b>" + row.ID + "</b>\nKeywords: " + polishedKeywords + "\nFeedURL: " + row.FeedURL + " \n" + active
+                                    text = text + "\n\nID: <b>" + row.ID + "</b>\n" + polishedKeywords + "\nFeedURL: " + row.FeedURL + " \n" + active
                                 });
                                 bot.sendMessage(chatId, text, {
                                     parse_mode: "HTML"
@@ -251,6 +257,10 @@ module.exports = {
                                     }
                                     var array = JSON.stringify(message.split(' '));
                                     convStatusMap.set(chatId, 2)
+                                    if (message == '/skip'){
+                                        array = "Everything";
+                                        textToUser = skipText + textToUser;
+                                    }
                                     stepDataTransferMap.set(chatId, array)
                                     bot.sendMessage(chatId, textToUser, options)
                                 });

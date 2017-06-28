@@ -253,7 +253,17 @@ function fetch(url) {
                             log(newElements, 1)
                             newElements.forEach(function(element){
                               rows.forEach(function(row) {
-                                  match(element, row.keywordGroup, row.Owner);
+                                    if (row.keywordGroup != "Everything"){
+                                        match(element, row.keywordGroup, row.Owner);
+                                    }
+                                    else {
+                                        var title = element["rss:title"]["#"];
+                                        var description = stripTags(element["rss:description"]["#"]);
+                                        var link = element["rss:link"]["#"]
+                                        bot.sendMessage(row.Owner, title + "\n" + description + "\n" + link, { parse_mode: "HTML" })
+                                        // Add source feed link? maybe the domain
+                                    }
+
                               });   
                             }); 
                         });
