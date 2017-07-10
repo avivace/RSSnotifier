@@ -379,6 +379,7 @@ module.exports = {
                                 var deleteQuery = "DELETE FROM QUERIES WHERE ID = ? AND Owner = ?;"
                                 db.run(deleteQuery, [rowId, chatId], function(){
                                     // Reset the conversation
+                                    resetConversation(chatId);
                                     // Notify the user with info about deleted query
                                     bot.sendMessage(chatId, "Bye bye to\n<b>" + keywordGroup + "</b>\non feed\n" + feed + ".\n<b>QUERY DELETED</b>!",{
                                         parse_mode: 'HTML'
