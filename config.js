@@ -8,3 +8,6 @@ config.token = '';
 //  specified in the whitelist array.
 config.whitelist_enabled = 0;
 config.whitelist = [];
+
+// Define feed fetching interval in seconds (default: 5 seconds)
+config.refreshInterval = 5;
