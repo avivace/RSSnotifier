@@ -289,8 +289,8 @@ log('RSS Notifier started'.green.bold, 0); // outputs green text
 
 // Bot up and running
 botUI.start(db, bot, config, HashMap)
-    // Run the entire thing every 5 seconds
-var job = schedule.scheduleJob('*/5 * * * * *', function() {
+    // Run the entire thing every "n" seconds (5 by default, you can change it in config file)
+var job = schedule.scheduleJob('*/' + config.refreshInterval + ' * * * * *', function() {
     getFeeds();
 });
 // TODO: different refresh time for specific feed urls?
