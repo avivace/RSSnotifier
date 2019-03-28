@@ -280,8 +280,8 @@ function fetch(url) {
 function feedParseDone(err, rows) {
     log(rows, 1)
     if (err) {
-        log(err, err.stack, 0);
-        return process.exit(1);
+        log('Error on feed...', 0);
+        log(err, err.stack, 1);
     }
 }
 // DO THINGS
