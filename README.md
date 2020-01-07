@@ -2,10 +2,12 @@
 
 > An RSS reader. On steroids.
 
-### `index.js`
+## Structure
+
+#### `index.js`
 A Node **backend** handles the feed parsing and reading. The `match` function flags specific elements, based on user-defined keywords (*queries*).
 
-### `bot.js`
+#### `bot.js`
 A telegram bot - working as a frontend - allowing multiple users to define their subscriptions, preferences and *queries*.
 
 Every subscription can be set on two modes:
@@ -13,7 +15,8 @@ Every subscription can be set on two modes:
 - **query-mode** - every query-matching element triggers a notification;
 - **reading-mode** - every new element will be notified.
 
-## Using
+## Usage
+
 Given you have Node (and npm) installed, deploy your instance:
 
 - Clone this repo, `git clone https://github.com/avivace/rssnotifier`
