@@ -1,6 +1,6 @@
 # RSSnotifier
 
-An RSS reader on steroids.
+> An RSS reader. On steroids.
 
 ### `index.js`
 A Node **backend** handles the feed parsing and reading. The `match` function flags specific elements, based on user-defined keywords (*queries*).
@@ -21,3 +21,6 @@ Given you have Node (and npm) installed, deploy your instance:
 - `npm install`
 - `npm start`
 - Talk with the bot and add a sample query
+
+
+Developed my [Denni Bevilacqua](https://github.com/dennib) and [Antonio Vivace](https://github.com/avivace)
