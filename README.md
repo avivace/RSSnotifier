@@ -2,6 +2,8 @@
 
 > An RSS reader. On steroids.
 
+Built by [Denni Bevilacqua](https://github.com/dennib) and [Antonio Vivace](https://github.com/avivace)
+
 ## Structure
 
 #### `index.js`
@@ -26,4 +28,3 @@ Given you have Node (and npm) installed, deploy your instance:
 - Talk with the bot and add a sample query
 
 
-Developed my [Denni Bevilacqua](https://github.com/dennib) and [Antonio Vivace](https://github.com/avivace)
